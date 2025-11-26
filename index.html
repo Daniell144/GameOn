@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl" class="dark">
+<html lang="he" dir="rtl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,22 +11,83 @@
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Heebo', 'sans-serif'],
+              sans: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+              tahoma: ['Tahoma', 'Verdana', 'sans-serif'],
             },
+            colors: {
+              xp: {
+                blue: '#245DDA',
+                blueLight: '#3A93FF',
+                beige: '#ECE9D8',
+                green: '#3C9E36',
+                orange: '#E68B2C',
+                red: '#E53E30'
+              },
+              discord: {
+                dark: '#313338',
+                sidebar: '#2B2D31',
+                active: '#3F4147',
+                hover: '#35373C'
+              }
+            },
+            boxShadow: {
+              'xp': '2px 2px 0px 0px rgba(0,0,0,0.3)',
+              'xp-inset': 'inset 2px 2px 0px 0px rgba(0,0,0,0.1)',
+            }
           }
         }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <style>
+      /* Base transitions */
       body {
-        font-family: 'Heebo', sans-serif;
-        /* Default base styles are handled by React classes now */
+        transition: background-color 0.3s ease, color 0.3s ease;
       }
-      /* Hide scrollbar for clean UI */
-      ::-webkit-scrollbar {
-        width: 0px;
+
+      /* XP Theme Styles */
+      body.theme-xp {
+        font-family: 'Tahoma', sans-serif;
+        background-color: #245DDA;
+        background-image: url('https://upload.wikimedia.org/wikipedia/en/2/27/Bliss_%28Windows_XP%29.png');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+      }
+      
+      .theme-xp ::-webkit-scrollbar {
+        width: 16px;
+        background: #ECE9D8;
+      }
+      .theme-xp ::-webkit-scrollbar-thumb {
+        background: #245DDA;
+        border: 2px solid #ECE9D8;
+        border-radius: 4px;
+      }
+      .theme-xp ::-webkit-scrollbar-button {
+        background: #245DDA;
+        height: 16px;
+      }
+
+      /* Modern Theme Styles */
+      body.theme-modern {
+        background-color: #f1f5f9; /* slate-100 */
+        font-family: 'Segoe UI', sans-serif;
+      }
+      body.theme-modern.dark {
+        background-color: #0f172a; /* slate-900 */
+        color: white;
+      }
+      
+      .theme-modern ::-webkit-scrollbar {
+        width: 8px;
         background: transparent;
+      }
+      .theme-modern ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .theme-modern.dark ::-webkit-scrollbar-thumb {
+        background: #475569;
       }
     </style>
   <script type="importmap">

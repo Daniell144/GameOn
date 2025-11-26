@@ -3,14 +3,15 @@ import {
   Menu, X, Heart, Star, User, MessageCircle, 
   Gamepad2, ChevronRight, Camera, 
   Settings, MapPin, Send, Plus, Moon, Sun, LogOut,
-  Shield, Bell, Smartphone, Monitor, Hash, Search, Circle, Globe
+  Shield, Bell, Smartphone, Monitor, Globe, Search, Minimize2, Maximize2, Layout
 } from 'lucide-react';
-import { ViewState, UserProfile, ChatThread, Platform } from './types';
+import { ViewState, UserProfile, ChatThread, Platform, AppTheme } from './types';
 import { INITIAL_PROFILE, MOCK_USERS, MOCK_CHATS, PLANS, CURRENT_USER_ID, TRANSLATIONS } from './constants';
 import { GameCard } from './components/GameCard';
 
 const App = () => {
   const [view, setView] = useState<ViewState>(ViewState.HOME);
+  const [appTheme, setAppTheme] = useState<AppTheme>('xp');
   const [myProfile, setMyProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [chats, setChats] = useState<ChatThread[]>(MOCK_CHATS);
@@ -18,63 +19,50 @@ const App = () => {
   const [matchAnimation, setMatchAnimation] = useState<'left' | 'right' | 'up' | null>(null);
   const [darkMode, setDarkMode] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('account');
-  const [language, setLanguage] = useState<'he' | 'en' | 'es' | 'fr'>('he');
+  const [settingsTab, setSettingsTab] = useState('appearance');
+  const [language, setLanguage] = useState<'he' | 'en'>('he');
 
   // --- Helpers ---
-
-  // Translation helper
   const t = (key: string) => {
-    // Default to Hebrew if language not found, or English if key missing in current lang
     const lang = (language === 'he' || language === 'en') ? language : 'en'; 
     return TRANSLATIONS[lang][key] || key;
   };
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
 
   useEffect(() => {
     document.documentElement.dir = language === 'he' ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
   }, [language]);
 
-  // Wrapped in useCallback to maintain reference stability for dependency arrays
-  const handleSwipe = useCallback((direction: 'left' | 'right' | 'up') => {
-    if (matchAnimation) return; // Debounce: prevent spamming actions while animating
+  useEffect(() => {
+    // Manage Body Classes for Theme
+    document.body.className = '';
+    if (appTheme === 'xp') {
+      document.body.classList.add('theme-xp');
+    } else {
+      document.body.classList.add('theme-modern');
+      if (darkMode) document.body.classList.add('dark');
+    }
+  }, [appTheme, darkMode]);
 
+  const handleSwipe = useCallback((direction: 'left' | 'right' | 'up') => {
+    if (matchAnimation) return;
     setMatchAnimation(direction);
     setTimeout(() => {
-      setSwipeIndex((prev) => (prev + 1) % MOCK_USERS.length); // Loop for demo
+      setSwipeIndex((prev) => (prev + 1) % MOCK_USERS.length);
       setMatchAnimation(null);
     }, 300);
   }, [matchAnimation]);
 
-  // Keyboard Event Listener Implementation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (view !== ViewState.HOME) return;
-      
       switch(e.key) {
-        case 'ArrowLeft':
-          handleSwipe('left');
-          break;
-        case 'ArrowRight':
-          handleSwipe('right');
-          break;
-        case 'ArrowUp':
-          handleSwipe('up');
-          break;
+        case 'ArrowLeft': handleSwipe('left'); break;
+        case 'ArrowRight': handleSwipe('right'); break;
+        case 'ArrowUp': handleSwipe('up'); break;
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
-    
-    // Cleanup function to remove listener when component unmounts or dependencies change
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [view, handleSwipe]);
 
@@ -82,20 +70,8 @@ const App = () => {
     setMyProfile(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleUpdateProfile('image', reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSendMessage = (text: string) => {
     if (!activeChatId || !text.trim()) return;
-    
     const newMessage = {
       id: Date.now().toString(),
       senderId: CURRENT_USER_ID,
@@ -103,20 +79,7 @@ const App = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isMe: true
     };
-
-    setChats(prev => prev.map(chat => {
-      if (chat.id === activeChatId) {
-        return {
-          ...chat,
-          messages: [...chat.messages, newMessage],
-          lastMessage: text,
-          timestamp: newMessage.timestamp
-        };
-      }
-      return chat;
-    }));
-
-    // AI Auto Reply Simulation
+    setChats(prev => prev.map(chat => chat.id === activeChatId ? { ...chat, messages: [...chat.messages, newMessage], lastMessage: text, timestamp: newMessage.timestamp } : chat));
     setTimeout(() => {
         const replyMessage = {
             id: (Date.now() + 1).toString(),
@@ -125,796 +88,699 @@ const App = () => {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             isMe: false
         };
-        setChats(prev => prev.map(chat => {
-            if (chat.id === activeChatId) {
-              return {
-                ...chat,
-                messages: [...chat.messages, replyMessage],
-                lastMessage: replyMessage.text,
-                timestamp: replyMessage.timestamp
-              };
-            }
-            return chat;
-        }));
+        setChats(prev => prev.map(chat => chat.id === activeChatId ? { ...chat, messages: [...chat.messages, replyMessage], lastMessage: replyMessage.text, timestamp: replyMessage.timestamp } : chat));
     }, 1500);
   };
 
-  const handleViewChange = (newView: ViewState) => {
-    setView(newView);
-    setIsMobileMenuOpen(false);
-  };
+  // ==========================================
+  // XP THEME COMPONENTS
+  // ==========================================
 
-  // --- Components ---
-
-  const SidebarContent = ({ isMobile = false }) => (
-    <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-10">
-        <h2 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-fuchsia-600 dark:from-violet-400 dark:to-fuchsia-500 italic tracking-tighter cursor-pointer" onClick={() => handleViewChange(ViewState.HOME)}>
-            GameOn
-        </h2>
-        {isMobile && (
-            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-600 dark:text-slate-300">
-                <X size={24} />
-            </button>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <button 
-            onClick={() => handleViewChange(ViewState.HOME)} 
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl ${view === ViewState.HOME ? 'bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}`}
-        >
-          <Gamepad2 /> {t('nav_discover')}
-        </button>
-        <button 
-            onClick={() => handleViewChange(ViewState.PROFILE)} 
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl ${view === ViewState.PROFILE ? 'bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}`}
-        >
-          <User /> {t('nav_profile')}
-        </button>
-        <button 
-            onClick={() => handleViewChange(ViewState.MATCHES)} 
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl ${view === ViewState.MATCHES ? 'bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}`}
-        >
-          <Heart /> {t('nav_matches')}
-        </button>
-        <button 
-            onClick={() => handleViewChange(ViewState.CHAT_LIST)} 
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl ${(view === ViewState.CHAT_LIST || view === ViewState.CHAT_ROOM) ? 'bg-violet-100 dark:bg-violet-600/20 text-violet-600 dark:text-violet-400' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}`}
-        >
-          <MessageCircle /> {t('nav_chats')}
-        </button>
-        <button 
-            onClick={() => handleViewChange(ViewState.SUBSCRIPTION)} 
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl ${view === ViewState.SUBSCRIPTION ? 'bg-yellow-100 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-500' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-yellow-600 dark:hover:text-yellow-500'}`}
-        >
-          <Star className={view === ViewState.SUBSCRIPTION ? "fill-yellow-600 dark:fill-yellow-500" : ""} /> {t('nav_subs')}
-        </button>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-4 px-4 uppercase tracking-wider">{t('system')}</h3>
-        <button 
-            onClick={() => handleViewChange(ViewState.SETTINGS)}
-            className={`flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl w-full ${view === ViewState.SETTINGS ? 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-        >
-            <Settings size={24} />
-            <span>{t('nav_settings')}</span>
-        </button>
-        <button className="flex items-center gap-4 text-lg font-medium transition-all px-4 py-3 rounded-xl w-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 mt-2">
-            <LogOut size={24} />
-            <span>{t('nav_logout')}</span>
-        </button>
-      </div>
-
-      {!isMobile && (
-        <div className="mt-auto pt-6 border-t border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors" onClick={() => handleViewChange(ViewState.PROFILE)}>
-                <img src={myProfile.image} className="w-10 h-10 rounded-full object-cover border border-violet-500" alt="" />
-                <div className="overflow-hidden">
-                    <p className="font-bold text-sm truncate text-slate-900 dark:text-white">{myProfile.name}</p>
-                    <p className="text-xs text-green-500 dark:text-green-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400 animate-pulse" /> {t('connected')}
-                    </p>
-                </div>
+  const XPWindow = ({ title, children, className = '', noPadding = false }: { title: string, children: React.ReactNode, className?: string, noPadding?: boolean }) => (
+    <div className={`flex flex-col h-full bg-[#ECE9D8] rounded-t-lg shadow-2xl border border-[#0054E3] overflow-hidden ${className}`}>
+        <div className="bg-gradient-to-r from-[#0058EE] via-[#245DDA] to-[#3A93FF] px-3 py-2 flex justify-between items-center select-none shrink-0">
+            <span className="text-white font-bold text-sm drop-shadow flex items-center gap-2 truncate">
+               <img src="https://w7.pngwing.com/pngs/382/204/png-transparent-globe-world-computer-icons-globe-miscellaneous-blue-globe.png" className="w-4 h-4" alt="" />
+               {title}
+            </span>
+            <div className="flex gap-1">
+                <button className="w-5 h-5 bg-[#D6D3CE] rounded-[3px] border border-white border-r-gray-500 border-b-gray-500 flex items-center justify-center hover:bg-[#eaeaea] active:border-gray-500 active:border-r-white active:border-b-white">
+                    <Minimize2 size={12} className="text-black opacity-60" />
+                </button>
+                <button className="w-5 h-5 bg-[#D6D3CE] rounded-[3px] border border-white border-r-gray-500 border-b-gray-500 flex items-center justify-center hover:bg-[#eaeaea] active:border-gray-500 active:border-r-white active:border-b-white">
+                    <Maximize2 size={12} className="text-black opacity-60" />
+                </button>
+                <button 
+                    onClick={() => setView(ViewState.HOME)}
+                    className="w-5 h-5 bg-[#E53E30] rounded-[3px] border border-[#ff8d86] border-r-[#961b12] border-b-[#961b12] flex items-center justify-center text-white hover:bg-[#ff5a4d] active:bg-[#b02b20]"
+                >
+                    <X size={14} strokeWidth={3} />
+                </button>
             </div>
         </div>
-      )}
+        <div className="bg-[#ECE9D8] border-b border-gray-400 flex items-center px-1 py-0.5 text-xs text-black shrink-0">
+            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">File</span>
+            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">View</span>
+            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">Tools</span>
+            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">Help</span>
+        </div>
+        <div className={`flex-1 overflow-auto bg-white ${noPadding ? '' : 'p-4'} text-black scrollbar-xp`}>
+            {children}
+        </div>
     </div>
   );
 
-  const MobileMenu = () => (
-    <>
-        {/* Overlay */}
-        <div 
-            className={`md:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            onClick={() => setIsMobileMenuOpen(false)}
-        />
-        
-        {/* Drawer */}
-        <div className={`md:hidden fixed inset-y-0 ${language === 'he' ? 'right-0' : 'left-0'} z-50 w-3/4 max-w-sm bg-white dark:bg-slate-900 shadow-2xl transition-transform duration-300 transform ${isMobileMenuOpen ? 'translate-x-0' : (language === 'he' ? 'translate-x-full' : '-translate-x-full')}`}>
-            <div className="p-6 h-full overflow-y-auto">
-                <SidebarContent isMobile={true} />
-            </div>
-        </div>
-    </>
-  );
-
-  const BottomNav = () => (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 flex justify-around items-center p-2 z-40 shadow-[0_-5px_20px_rgba(0,0,0,0.1)] dark:shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
-      <button onClick={() => setView(ViewState.HOME)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${view === ViewState.HOME ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
-        <Gamepad2 size={24} />
-        <span className="text-[10px] font-medium">{t('bn_home')}</span>
-      </button>
-      <button onClick={() => setView(ViewState.MATCHES)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${view === ViewState.MATCHES ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
-        <Heart size={24} />
-        <span className="text-[10px] font-medium">{t('bn_matches')}</span>
-      </button>
-      <button onClick={() => setView(ViewState.CHAT_LIST)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${(view === ViewState.CHAT_LIST || view === ViewState.CHAT_ROOM) ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
-        <MessageCircle size={24} />
-        <span className="text-[10px] font-medium">{t('bn_chat')}</span>
-      </button>
-      <button onClick={() => setView(ViewState.SUBSCRIPTION)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${view === ViewState.SUBSCRIPTION ? 'text-yellow-600 dark:text-yellow-500' : 'text-slate-500'}`}>
-        <Star size={24} className={view === ViewState.SUBSCRIPTION ? "fill-yellow-600 dark:fill-yellow-500" : ""} />
-        <span className="text-[10px] font-medium">{t('bn_subs')}</span>
-      </button>
-      <button onClick={() => setView(ViewState.PROFILE)} className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${view === ViewState.PROFILE ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500'}`}>
-        <User size={24} />
-        <span className="text-[10px] font-medium">{t('bn_profile')}</span>
-      </button>
-    </div>
-  );
-
-  const HeaderButton = () => (
+  const XPButton = ({ onClick, children, active = false }: any) => (
       <button 
-        onClick={() => setIsMobileMenuOpen(true)}
-        className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors md:hidden"
+        onClick={onClick}
+        className={`px-4 py-2 text-sm font-normal text-black transition-none
+        ${active ? 'font-bold bg-white' : 'bg-transparent'}
+        hover:underline hover:text-[#0054E3] cursor-pointer flex items-center gap-2 w-full`}
       >
-        <Menu size={24} />
+        {children}
       </button>
   );
+
+  const XPSidebar = () => (
+    <div className="w-64 bg-[#7A96DF] bg-gradient-to-b from-[#7A96DF] to-[#98B4E2] p-3 flex flex-col gap-4 overflow-y-auto h-full">
+        <div className="rounded-t-lg overflow-hidden bg-white shadow-md">
+            <div className="bg-gradient-to-r from-white to-[#C6D3F7] p-1">
+                 <div className="bg-gradient-to-r from-[#225ACA] to-[#88A9E6] px-3 py-1 rounded-t-md flex justify-between items-center cursor-pointer">
+                    <span className="text-white font-bold text-sm">System Tasks</span>
+                    <ChevronRight className="text-white w-3 h-3 rotate-90" />
+                 </div>
+            </div>
+            <div className="bg-[#D6DFF7] p-2 space-y-1">
+                <XPButton onClick={() => setView(ViewState.HOME)} active={view === ViewState.HOME}><Gamepad2 size={16} /> {t('nav_discover')}</XPButton>
+                <XPButton onClick={() => setView(ViewState.PROFILE)} active={view === ViewState.PROFILE}><User size={16} /> {t('nav_profile')}</XPButton>
+                <XPButton onClick={() => setView(ViewState.SETTINGS)} active={view === ViewState.SETTINGS}><Settings size={16} /> {t('nav_settings')}</XPButton>
+            </div>
+        </div>
+        <div className="rounded-t-lg overflow-hidden bg-white shadow-md">
+            <div className="bg-gradient-to-r from-white to-[#C6D3F7] p-1">
+                 <div className="bg-gradient-to-r from-[#225ACA] to-[#88A9E6] px-3 py-1 rounded-t-md flex justify-between items-center cursor-pointer">
+                    <span className="text-white font-bold text-sm">Other Places</span>
+                    <ChevronRight className="text-white w-3 h-3 rotate-90" />
+                 </div>
+            </div>
+            <div className="bg-[#D6DFF7] p-2 space-y-1">
+                <XPButton onClick={() => setView(ViewState.MATCHES)} active={view === ViewState.MATCHES}><Heart size={16} /> {t('nav_matches')}</XPButton>
+                <XPButton onClick={() => setView(ViewState.CHAT_LIST)} active={view === ViewState.CHAT_LIST}><MessageCircle size={16} /> {t('nav_chats')}</XPButton>
+                <XPButton onClick={() => setView(ViewState.SUBSCRIPTION)} active={view === ViewState.SUBSCRIPTION}><Star size={16} /> {t('nav_subs')}</XPButton>
+            </div>
+        </div>
+    </div>
+  );
+
+  const XPTaskbar = () => (
+    <div className="fixed bottom-0 left-0 right-0 h-10 bg-[#245DDA] border-t-2 border-[#3A93FF] flex items-center px-1 z-50 shadow-2xl">
+        <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="h-8 px-2 bg-[#3C9E36] hover:bg-[#4CB845] rounded-r-[10px] rounded-l-md flex items-center gap-2 shadow-[inset_1px_1px_0px_rgba(255,255,255,0.5)] border border-[#2B7924] mr-2 ml-0"
+            style={{ 
+                background: 'linear-gradient(to bottom, #3C9E36 0%, #3C9E36 50%, #2B7924 100%)',
+                boxShadow: '2px 2px 2px rgba(0,0,0,0.5)'
+            }}
+        >
+            <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[#E53E30] italic font-serif font-black shadow-inner border border-red-200">W</div>
+            <span className="text-white font-bold italic text-shadow pr-2">Start</span>
+        </button>
+        <div className="h-full border-r border-[#1B46A0] border-l border-[#3A93FF] mx-1"></div>
+        <div className="flex-1 flex gap-1 px-1 overflow-x-auto">
+             {[
+               { v: ViewState.HOME, i: <Gamepad2 size={16}/>, l: t('bn_home') },
+               { v: ViewState.MATCHES, i: <Heart size={16}/>, l: t('bn_matches') },
+               { v: ViewState.CHAT_LIST, i: <MessageCircle size={16}/>, l: t('bn_chat') },
+               { v: ViewState.SUBSCRIPTION, i: <Star size={16}/>, l: t('bn_subs') }
+             ].map(item => (
+                <button key={item.v} onClick={() => setView(item.v)} className={`flex items-center gap-2 px-4 h-8 rounded text-white text-xs ${view === item.v ? 'bg-[#1845A3] shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)]' : 'hover:bg-[#316AC5]'}`}>
+                    {item.i} {item.l}
+                </button>
+             ))}
+        </div>
+        <div className="bg-[#0B9CEE] h-full px-3 flex items-center gap-2 border-l border-[#194086] border-t border-[#194086] shadow-inner ml-auto">
+             <span className="text-white text-xs">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        </div>
+    </div>
+  );
+
+  // ==========================================
+  // MODERN THEME COMPONENTS
+  // ==========================================
+
+  const ModernSidebar = () => (
+    <div className="w-20 lg:w-64 bg-slate-900 dark:bg-black border-r border-slate-800 flex flex-col h-full shrink-0 transition-all duration-300">
+        <div className="p-4 flex items-center gap-3 border-b border-slate-800">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
+                <Gamepad2 className="text-white w-6 h-6" />
+            </div>
+            <span className="font-bold text-xl text-white hidden lg:block tracking-tight">GameOn</span>
+        </div>
+        <div className="flex-1 p-3 space-y-2">
+            {[
+                { v: ViewState.HOME, i: Gamepad2, l: t('nav_discover') },
+                { v: ViewState.MATCHES, i: Heart, l: t('nav_matches') },
+                { v: ViewState.CHAT_LIST, i: MessageCircle, l: t('nav_chats') },
+                { v: ViewState.SUBSCRIPTION, i: Star, l: t('nav_subs') },
+                { v: ViewState.PROFILE, i: User, l: t('nav_profile') },
+                { v: ViewState.SETTINGS, i: Settings, l: t('nav_settings') },
+            ].map((item) => (
+                <button
+                    key={item.v}
+                    onClick={() => setView(item.v)}
+                    className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all duration-200
+                    ${view === item.v 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
+                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                >
+                    <item.i size={24} />
+                    <span className="hidden lg:block font-medium">{item.l}</span>
+                </button>
+            ))}
+        </div>
+    </div>
+  );
+
+  const ModernBottomNav = () => (
+    <div className="fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-around items-center z-50 px-2 pb-safe">
+        {[
+            { v: ViewState.HOME, i: Gamepad2, l: t('bn_home') },
+            { v: ViewState.MATCHES, i: Heart, l: t('bn_matches') },
+            { v: ViewState.CHAT_LIST, i: MessageCircle, l: t('bn_chat') },
+            { v: ViewState.SUBSCRIPTION, i: Star, l: t('bn_subs') },
+            { v: ViewState.PROFILE, i: User, l: t('bn_profile') },
+        ].map(item => (
+            <button
+                key={item.v}
+                onClick={() => setView(item.v)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors
+                ${view === item.v ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
+            >
+                <item.i size={20} strokeWidth={view === item.v ? 2.5 : 2} />
+                <span className="text-[10px] font-medium">{item.l}</span>
+            </button>
+        ))}
+    </div>
+  );
+
+  // ==========================================
+  // VIEW RENDERERS (Adaptable)
+  // ==========================================
 
   const renderHome = () => {
     const activeUser = MOCK_USERS[swipeIndex];
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-4 w-full pb-20 md:pb-4">
-        {/* Top Bar - Mobile Only */}
-        <div className="w-full flex justify-between items-center mb-4 md:hidden">
-            <HeaderButton />
-            <h1 className="text-2xl font-black italic tracking-tighter">
-                <span className="text-violet-600 dark:text-violet-500">Game</span>
-                <span className="text-slate-900 dark:text-white">On</span>
-            </h1>
-            <div className="w-10"></div> {/* Spacer */}
-        </div>
-
-        <div className="flex-1 flex flex-col justify-center w-full max-w-md relative">
-            {/* Card Stack */}
-            <div className="relative w-full aspect-[3/4] max-h-[55vh] md:max-h-[600px]">
-                {/* Background Card Effect */}
-                <div className="absolute top-2 left-2 w-full h-full bg-slate-200 dark:bg-slate-800 rounded-3xl opacity-50 transform scale-95" />
-                
-                {/* Main Card */}
-                <div className={`relative w-full h-full rounded-3xl overflow-hidden shadow-2xl shadow-slate-400/50 dark:shadow-black/50 bg-white dark:bg-slate-800 transition-all duration-300 transform 
-                    ${matchAnimation === 'left' ? '-translate-x-full -rotate-12 opacity-0' : ''}
-                    ${matchAnimation === 'right' ? 'translate-x-full rotate-12 opacity-0' : ''}
-                    ${matchAnimation === 'up' ? '-translate-y-full opacity-0' : ''}
-                `}>
-                    <img src={activeUser.image} alt={activeUser.name} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    
-                    <div className="absolute bottom-0 w-full p-6 text-white">
-                        <div className="flex items-end gap-3 mb-2">
-                            <h2 className="text-4xl font-bold drop-shadow-lg">{activeUser.name}</h2>
-                            <span className="text-2xl font-light mb-1 drop-shadow-md">{activeUser.age}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 mb-4 text-slate-200 text-sm font-medium shadow-black drop-shadow-md">
-                            <MapPin size={16} />
-                            <span>{activeUser.distance} {t('distance_away')}</span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {activeUser.platforms.map(p => (
-                                <span key={p} className="px-3 py-1 bg-violet-600/90 backdrop-blur-md rounded-full text-xs font-bold shadow-sm border border-violet-400/30">
-                                    {p}
-                                </span>
-                            ))}
-                        </div>
-
-                        <p className="text-slate-100 line-clamp-2 mb-4 text-sm font-medium drop-shadow-md">
-                            {activeUser.bio}
-                        </p>
-
-                        {/* Quick Games Preview */}
-                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            {activeUser.games.map(g => (
-                                <div key={g.id} className="text-2xl bg-black/60 w-10 h-10 flex items-center justify-center rounded-full backdrop-blur-md border border-white/20 shrink-0 shadow-lg">
-                                    {g.icon}
-                                </div>
-                            ))}
+    
+    if (appTheme === 'xp') {
+        return (
+            <XPWindow title="GameOn Discovery" className="max-w-4xl mx-auto h-[600px] my-auto">
+                <div className="flex h-full">
+                    <div className="w-1/3 bg-[#D6DFF7] border-r border-white p-4 hidden md:block">
+                        <h3 className="font-bold text-[#1E3C7B] mb-2">{t('nav_discover')}</h3>
+                        <div className="mt-8 bg-white border border-gray-400 p-2 shadow-sm">
+                            <img src={activeUser.image} className="w-full h-auto object-cover border border-gray-600 mb-2" alt="" />
+                            <div className="text-center font-bold">{activeUser.name}</div>
                         </div>
                     </div>
+                    <div className="flex-1 bg-white p-8 flex flex-col items-center justify-center relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+                         <div className={`relative bg-[#ECE9D8] border-2 border-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] p-1 w-full max-w-sm transform transition-all duration-300
+                            ${matchAnimation === 'left' ? '-translate-x-full rotate-[-10deg] opacity-0' : ''}
+                            ${matchAnimation === 'right' ? 'translate-x-full rotate-[10deg] opacity-0' : ''}
+                            ${matchAnimation === 'up' ? '-translate-y-full opacity-0' : ''}
+                         `}>
+                            <div className="bg-gradient-to-r from-[#0058EE] to-[#3A93FF] text-white px-2 py-1 font-bold flex justify-between">
+                                <span>{activeUser.name}.exe</span>
+                                <X size={16} />
+                            </div>
+                            <div className="bg-white border border-gray-500 p-4">
+                                <img src={activeUser.image} className="w-full h-64 object-cover border-2 border-inset border-gray-300 mb-4" alt="" />
+                                <div className="space-y-2">
+                                     <div className="flex justify-between border-b border-gray-300 pb-1">
+                                        <span>Age:</span> <span className="font-bold">{activeUser.age}</span>
+                                     </div>
+                                     <div className="bg-[#FFFFE1] border border-gray-300 p-2 text-sm">{activeUser.bio}</div>
+                                </div>
+                            </div>
+                         </div>
+                         <div className="flex gap-4 mt-6">
+                             <button onClick={() => handleSwipe('left')} className="px-6 py-2 bg-[#ECE9D8] border-2 border-white border-r-black border-b-black active:border-t-black active:border-l-black text-black">Pass</button>
+                             <button onClick={() => handleSwipe('right')} className="px-6 py-2 bg-[#ECE9D8] border-2 border-white border-r-black border-b-black active:border-t-black active:border-l-black font-bold text-black">Like</button>
+                         </div>
+                    </div>
                 </div>
-            </div>
+            </XPWindow>
+        );
+    }
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-center gap-8 mt-6 w-full">
-                <button onClick={() => handleSwipe('left')} className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white dark:bg-slate-800/80 border-2 border-red-500 text-red-500 flex items-center justify-center text-3xl hover:bg-red-500 hover:text-white transition-all shadow-lg hover:shadow-red-500/30 hover:scale-110 backdrop-blur-sm group" title="Pass (Left Arrow)">
-                    <X className="group-active:scale-90 transition-transform" />
-                </button>
-                <button onClick={() => handleSwipe('up')} className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white dark:bg-slate-800/80 border-2 border-blue-400 text-blue-400 flex items-center justify-center text-xl hover:bg-blue-400 hover:text-white transition-all shadow-lg hover:shadow-blue-400/30 hover:scale-110 -mt-4 backdrop-blur-sm group" title="Super Like (Up Arrow)">
-                    <Star fill="currentColor" className="group-active:scale-90 transition-transform" />
-                </button>
-                <button onClick={() => handleSwipe('right')} className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white dark:bg-slate-800/80 border-2 border-green-500 text-green-500 flex items-center justify-center text-3xl hover:bg-green-500 hover:text-white transition-all shadow-lg hover:shadow-green-500/30 hover:scale-110 backdrop-blur-sm group" title="Like (Right Arrow)">
-                    <Heart fill="currentColor" className="group-active:scale-90 transition-transform" />
-                </button>
-            </div>
-            
-            <div className="hidden md:block text-center mt-4 text-xs text-slate-400 dark:text-slate-600 font-mono">
-                {t('keyboard_shortcuts')}
-            </div>
-        </div>
+    // Modern Home
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-4">
+          <div className="w-full max-w-md relative aspect-[3/4]">
+             <div className={`absolute inset-0 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 ease-out transform
+                 ${matchAnimation === 'left' ? '-translate-x-[150%] rotate-[-20deg] opacity-0' : ''}
+                 ${matchAnimation === 'right' ? 'translate-x-[150%] rotate-[20deg] opacity-0' : ''}
+                 ${matchAnimation === 'up' ? '-translate-y-[150%] opacity-0' : ''}
+             `}>
+                 <div className="absolute inset-0">
+                     <img src={activeUser.image} className="w-full h-full object-cover" alt="" />
+                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
+                 </div>
+                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+                     <div className="flex items-end gap-3 mb-2">
+                         <h2 className="text-3xl font-bold">{activeUser.name}</h2>
+                         <span className="text-xl opacity-80 mb-1">{activeUser.age}</span>
+                     </div>
+                     <p className="text-sm opacity-90 mb-4 line-clamp-2">{activeUser.bio}</p>
+                     <div className="flex flex-wrap gap-2 mb-4">
+                         {activeUser.games.map(g => (
+                             <span key={g.id} className="text-xs bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">{g.name}</span>
+                         ))}
+                     </div>
+                 </div>
+             </div>
+          </div>
+          <div className="flex items-center gap-6 mt-8">
+              <button onClick={() => handleSwipe('left')} className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-800 text-red-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><X size={28} /></button>
+              <button onClick={() => handleSwipe('up')} className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><Star size={24} /></button>
+              <button onClick={() => handleSwipe('right')} className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/20 text-green-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><Heart size={28} fill="currentColor" /></button>
+          </div>
       </div>
     );
   };
 
-  const renderProfile = () => (
-    <div className="h-full overflow-y-auto pb-24 md:pb-10 w-full">
-      <div className="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 md:hidden">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('nav_profile')}</h2>
-        <HeaderButton />
-      </div>
-
-      <div className="p-6 md:p-10 max-w-2xl mx-auto">
-        <h2 className="text-3xl font-bold mb-8 hidden md:block text-slate-900 dark:text-white">{t('edit_profile_title')}</h2>
-
-        <div className="flex flex-col md:flex-row gap-8 items-start">
-            {/* Image Section */}
-            <div className="w-full md:w-auto flex flex-col items-center">
-                <div className="relative w-40 h-40 group">
-                    <div className="w-full h-full rounded-full p-1 bg-gradient-to-tr from-violet-500 to-fuchsia-500">
-                        <img src={myProfile.image} className="w-full h-full rounded-full object-cover border-4 border-white dark:border-slate-900" alt="Profile" />
-                    </div>
-                    <label className="absolute bottom-0 right-2 bg-white text-slate-900 p-2 rounded-full cursor-pointer shadow-lg hover:bg-slate-200 transition-colors border border-slate-200 dark:border-none">
-                        <Camera size={20} />
-                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                    </label>
+  const renderProfile = () => {
+      if (appTheme === 'xp') {
+        return (
+          <XPWindow title="User Properties">
+             <div className="p-4 max-w-2xl mx-auto">
+                <div className="flex gap-1 border-b border-gray-400 mb-4 px-2">
+                    <div className="bg-white border-t border-l border-r border-gray-400 px-4 py-1 rounded-t relative top-[1px] z-10">General</div>
                 </div>
-                <p className="mt-4 text-slate-500 dark:text-slate-400 text-sm">{t('change_photo')}</p>
+                <div className="bg-white border border-gray-400 p-6 flex flex-col md:flex-row gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                        <img src={myProfile.image} className="w-32 h-32 object-cover border-2 border-gray-300 p-1 bg-white shadow-sm" alt="" />
+                        <label className="px-3 py-1 bg-[#ECE9D8] border border-gray-500 text-xs cursor-pointer hover:bg-white">Browse...</label>
+                    </div>
+                    <div className="flex-1 space-y-4">
+                        <div className="grid grid-cols-[100px_1fr] items-center gap-2">
+                            <label className="text-right text-sm">Name:</label>
+                            <input type="text" value={myProfile.name} onChange={(e) => handleUpdateProfile('name', e.target.value)} className="border border-gray-400 p-1 text-sm outline-none" />
+                        </div>
+                        <div className="border border-gray-300 p-2 bg-white relative mt-4">
+                            <span className="absolute -top-2 right-2 bg-white px-1 text-xs text-[#0054E3]">Bio</span>
+                            <textarea value={myProfile.bio} onChange={(e) => handleUpdateProfile('bio', e.target.value)} className="w-full h-20 text-sm outline-none resize-none" />
+                        </div>
+                    </div>
+                </div>
+             </div>
+          </XPWindow>
+        );
+      }
+      
+      // Modern Profile
+      return (
+          <div className="max-w-2xl mx-auto p-4 md:p-8">
+              <h1 className="text-3xl font-bold mb-8 text-slate-900 dark:text-white">{t('edit_profile_title')}</h1>
+              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
+                  <div className="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                  <div className="px-8 pb-8">
+                      <div className="relative -mt-16 mb-6">
+                          <img src={myProfile.image} className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 object-cover" alt="" />
+                          <button className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700">
+                              <Camera size={18} />
+                          </button>
+                      </div>
+                      <div className="grid gap-6">
+                          <div>
+                              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{t('label_display_name')}</label>
+                              <input value={myProfile.name} onChange={(e) => handleUpdateProfile('name', e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                          </div>
+                          <div>
+                              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{t('label_bio')}</label>
+                              <textarea value={myProfile.bio} onChange={(e) => handleUpdateProfile('bio', e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none" />
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const renderMatches = () => {
+     if (appTheme === 'xp') {
+         return (
+            <XPWindow title={`My Matches (${MOCK_USERS.length})`}>
+                <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {MOCK_USERS.map(user => (
+                        <div key={user.id} className="flex flex-col items-center group cursor-pointer p-2 hover:bg-[#316AC5] hover:border-[#316AC5] border border-transparent rounded-sm hover:text-white">
+                            <img src={user.image} className="w-16 h-16 object-cover mb-1 border border-gray-300 bg-white p-0.5 shadow-sm" alt="" />
+                            <span className="text-xs text-center line-clamp-2">{user.name}</span>
+                        </div>
+                    ))}
+                </div>
+            </XPWindow>
+         );
+     }
+     
+     // Modern Matches
+     return (
+         <div className="p-4 md:p-8">
+             <h1 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white">{t('matches_title')}</h1>
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                 {MOCK_USERS.map((user) => (
+                     <div key={user.id} className="group relative aspect-[3/4] rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all">
+                         <img src={user.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
+                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
+                             <span className="text-white font-bold">{user.name}</span>
+                             <span className="text-white/80 text-xs">{user.age}</span>
+                         </div>
+                     </div>
+                 ))}
+             </div>
+         </div>
+     );
+  };
+
+  const renderChatList = () => {
+    if (appTheme === 'xp') {
+        return (
+            <XPWindow title="MSN Messenger - Chat">
+                <div className="flex h-full">
+                    <div className="w-64 bg-[#F0F2F5] border-r border-gray-300 p-2 hidden md:flex flex-col gap-2">
+                        <div className="bg-gradient-to-r from-[#D7E4F2] to-[#A3C3E5] p-2 flex items-center gap-2 border border-[#8DA9D4] rounded-t">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Windows_Live_Messenger_logo.svg/1024px-Windows_Live_Messenger_logo.svg.png" className="w-6 h-6" alt="MSN" />
+                            <span className="font-bold text-[#1F3B5F] text-sm">Contacts</span>
+                        </div>
+                        <div className="flex-1 bg-white border border-[#8DA9D4] overflow-y-auto p-1">
+                            {chats.map(chat => (
+                                <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setView(ViewState.CHAT_ROOM); }} className="flex items-center gap-2 p-1 hover:bg-[#CEE5F2] cursor-pointer">
+                                    <img src={chat.user.image} className="w-8 h-8 border border-gray-300" alt="" />
+                                    <div className="text-xs font-bold text-[#1F3B5F] truncate">{chat.user.name}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex-1 bg-white flex flex-col items-center justify-center p-8">
+                         <span className="text-[#1F3B5F] font-bold">Select a contact to start chatting</span>
+                    </div>
+                </div>
+            </XPWindow>
+        );
+    }
+    
+    // Modern Chat List
+    return (
+        <div className="max-w-3xl mx-auto p-4 h-full flex flex-col">
+            <h1 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">{t('messages_title')}</h1>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg flex-1 overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-700">
+                {chats.map((chat) => (
+                    <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setView(ViewState.CHAT_ROOM); }} className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors">
+                        <div className="relative">
+                            <img src={chat.user.image} className="w-12 h-12 rounded-full object-cover" alt="" />
+                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-baseline mb-1">
+                                <h3 className="font-bold text-slate-900 dark:text-white truncate">{chat.user.name}</h3>
+                                <span className="text-xs text-slate-500">{chat.timestamp}</span>
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate">{chat.lastMessage}</p>
+                        </div>
+                    </div>
+                ))}
             </div>
+        </div>
+    );
+  };
 
-            {/* Form Section */}
-            <div className="flex-1 space-y-6 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <label className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('label_display_name')}</label>
-                        <input 
-                        type="text" 
-                        value={myProfile.name}
-                        onChange={(e) => handleUpdateProfile('name', e.target.value)}
-                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 transition-all"
-                        />
-                    </div>
+  const renderChatRoom = () => {
+      const activeChat = chats.find(c => c.id === activeChatId);
+      if (!activeChat) return null;
 
-                    <div className="space-y-2">
-                        <label className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('label_age')}</label>
-                        <input 
-                        type="number" 
-                        value={myProfile.age}
-                        onChange={(e) => handleUpdateProfile('age', parseInt(e.target.value))}
-                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500 transition-all"
-                        />
+      if (appTheme === 'xp') {
+        return (
+            <XPWindow title={`Conversation with ${activeChat.user.name}`} noPadding>
+                <div className="flex flex-col h-full bg-[#F6F9FC]">
+                    <div className="bg-gradient-to-r from-[#EBF3FA] to-[#CEDEF2] p-2 border-b border-[#96B5D7] flex items-center gap-2">
+                        <button onClick={() => setView(ViewState.CHAT_LIST)} className="md:hidden text-xs border p-1">Back</button>
+                        <img src={activeChat.user.image} className="w-10 h-10 border border-white shadow-sm" alt="" />
+                        <div className="text-[#1F3B5F] font-bold text-sm">{activeChat.user.name}</div>
                     </div>
+                    <div className="flex-1 overflow-y-auto p-4 bg-white border border-[#96B5D7] m-2">
+                        {activeChat.messages.map(msg => (
+                            <div key={msg.id} className="mb-2 text-sm">
+                                <span className={`font-bold ${msg.isMe ? 'text-[#0000FF]' : 'text-[#FF0000]'}`}>{msg.isMe ? 'You' : activeChat.user.name} says:</span>
+                                <span className="text-black ml-1 font-tahoma">{msg.text}</span>
+                            </div>
+                        ))}
+                    </div>
+                    <form className="h-24 m-2 mt-0 border border-[#96B5D7] bg-white flex flex-col" onSubmit={(e) => { e.preventDefault(); handleSendMessage((e.target as any).msg.value); (e.target as any).msg.value=''; }}>
+                        <input name="msg" className="flex-1 p-2 outline-none font-tahoma text-sm" placeholder="Type a message..." />
+                        <button type="submit" className="bg-gray-100 border-t p-1 text-xs">Send</button>
+                    </form>
                 </div>
+            </XPWindow>
+        );
+      }
 
-                <div className="space-y-2">
-                    <label className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('label_bio')}</label>
-                    <textarea 
-                        value={myProfile.bio}
-                        onChange={(e) => handleUpdateProfile('bio', e.target.value)}
-                        className="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl p-4 text-slate-900 dark:text-white focus:outline-none focus:border-violet-500 transition-all h-32 resize-none"
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <label className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('label_platforms')}</label>
-                    <div className="flex flex-wrap gap-2">
-                        {Object.values(Platform).map(p => {
-                            const isActive = myProfile.platforms.includes(p);
-                            return (
-                                <button
-                                    key={p}
-                                    onClick={() => {
-                                        const newPlatforms = isActive 
-                                            ? myProfile.platforms.filter(pl => pl !== p)
-                                            : [...myProfile.platforms, p];
-                                        handleUpdateProfile('platforms', newPlatforms);
-                                    }}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all border ${isActive ? 'bg-violet-600 border-violet-500 text-white shadow-lg shadow-violet-500/20' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-400'}`}
-                                >
-                                    {p === Platform.PS5 ? 'PlayStation' : p}
-                                </button>
-                            );
-                        })}
+      // Modern Chat Room
+      return (
+        <div className="h-full flex flex-col bg-white dark:bg-slate-900">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+                 <button onClick={() => setView(ViewState.CHAT_LIST)} className="md:hidden p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"><ChevronRight className="rotate-180" /></button>
+                 <img src={activeChat.user.image} className="w-10 h-10 rounded-full" alt="" />
+                 <span className="font-bold text-slate-900 dark:text-white">{activeChat.user.name}</span>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {activeChat.messages.map(msg => (
+                    <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[75%] px-4 py-2 rounded-2xl ${msg.isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-tl-none'}`}>
+                            {msg.text}
+                        </div>
                     </div>
+                ))}
+            </div>
+            <form className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" onSubmit={(e) => { e.preventDefault(); handleSendMessage((e.target as any).msg.value); (e.target as any).msg.value=''; }}>
+                <div className="flex gap-2">
+                    <input name="msg" className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 outline-none text-slate-900 dark:text-white" placeholder={t('type_message')} />
+                    <button type="submit" className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white"><Send size={18} /></button>
                 </div>
+            </form>
+        </div>
+      );
+  };
 
-                <div className="space-y-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                    <div className="flex justify-between items-center">
-                        <label className="text-sm text-slate-500 dark:text-slate-400 font-medium">{t('label_my_games')}</label>
-                        <button className="text-xs text-violet-600 dark:text-violet-400 flex items-center gap-1 hover:text-violet-500 bg-violet-100 dark:bg-violet-500/10 px-3 py-1 rounded-full">
-                            <Plus size={14} /> {t('add_game')}
-                        </button>
+  const renderSettings = () => {
+      // 1. XP SETTINGS (Control Panel)
+      if (appTheme === 'xp') {
+        return (
+            <XPWindow title="Control Panel">
+                 <div className="flex h-full">
+                    <div className="w-48 bg-gradient-to-b from-[#7A96DF] to-[#98B4E2] p-4 text-white hidden md:block">
+                        <div className="font-bold mb-2">Control Panel</div>
+                        <div className="text-xs mb-4">Switch to Classic View</div>
+                        <div className="border-t border-[#98B4E2] my-2"></div>
                     </div>
-                    <div className="grid grid-cols-1 gap-3">
-                        {myProfile.games.map(game => (
-                            <GameCard 
-                              key={game.id} 
-                              game={game} 
-                              labels={{
-                                rank: t('game_rank'),
-                                role: t('game_role'),
-                                noInfo: t('no_info')
-                              }}
-                            />
+                    <div className="flex-1 bg-white p-6 overflow-y-auto">
+                        <h2 className="text-xl font-bold mb-6 text-black">Pick a category</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                            <div className="flex gap-3 items-start cursor-pointer group">
+                                <img src="https://w7.pngwing.com/pngs/382/204/png-transparent-globe-world-computer-icons-globe-miscellaneous-blue-globe.png" className="w-12 h-12" alt="" />
+                                <div>
+                                    <h3 className="font-bold text-[#1F3B5F] group-hover:underline group-hover:text-[#E68B2C]">Appearance and Themes</h3>
+                                    <p className="text-xs text-gray-500">Change the computer's theme.</p>
+                                    <div className="mt-2 flex flex-col gap-2">
+                                        <button onClick={() => setAppTheme('modern')} className="text-xs text-left px-2 py-1 border bg-gray-100 hover:bg-[#316AC5] hover:text-white">
+                                            Switch to Modern View
+                                        </button>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => setLanguage('he')} className={`text-xs px-2 border ${language === 'he' ? 'bg-[#316AC5] text-white' : 'bg-gray-100'}`}>Heb</button>
+                                            <button onClick={() => setLanguage('en')} className={`text-xs px-2 border ${language === 'en' ? 'bg-[#316AC5] text-white' : 'bg-gray-100'}`}>Eng</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+            </XPWindow>
+        );
+      }
+
+      // 2. MODERN SETTINGS (Discord Style)
+      return (
+        <div className="flex h-full bg-[#313338] text-gray-200 font-sans">
+             <div className="w-60 bg-[#2B2D31] flex flex-col text-xs font-medium">
+                <div className="p-4 pt-8">
+                     <div className="text-gray-400 font-bold mb-2 px-2 text-[11px] uppercase">{t('user_settings')}</div>
+                     {[
+                        { id: 'account', l: t('set_account') },
+                        { id: 'profile', l: t('set_profile') },
+                        { id: 'privacy', l: t('set_privacy') },
+                        { id: 'subs', l: t('set_subs') }
+                     ].map(item => (
+                         <div 
+                             key={item.id} 
+                             onClick={() => setSettingsTab(item.id)}
+                             className={`px-2 py-1.5 mb-0.5 rounded cursor-pointer ${settingsTab === item.id ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
+                         >
+                             {item.l}
+                         </div>
+                     ))}
+                     <div className="border-b border-[#3F4147] my-2 mx-2"></div>
+                     <div className="text-gray-400 font-bold mb-2 px-2 text-[11px] uppercase">{t('app_settings')}</div>
+                     {[
+                        { id: 'appearance', l: t('set_appearance') },
+                        { id: 'language', l: t('set_language') },
+                     ].map(item => (
+                         <div 
+                             key={item.id} 
+                             onClick={() => setSettingsTab(item.id)}
+                             className={`px-2 py-1.5 mb-0.5 rounded cursor-pointer ${settingsTab === item.id ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
+                         >
+                             {item.l}
+                         </div>
+                     ))}
+                </div>
+             </div>
+             <div className="flex-1 bg-[#313338] p-10 overflow-y-auto">
+                 {settingsTab === 'appearance' && (
+                     <div className="max-w-2xl">
+                         <h2 className="text-xl font-bold text-white mb-6">{t('set_appearance')}</h2>
+                         <div className="mb-8">
+                             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">{t('theme')}</h3>
+                             <div className="flex gap-4">
+                                 <div 
+                                    onClick={() => setDarkMode(false)} 
+                                    className={`flex-1 p-4 bg-white rounded-lg cursor-pointer border-2 ${!darkMode ? 'border-green-500' : 'border-transparent'}`}
+                                 >
+                                     <div className="w-full h-24 bg-gray-100 rounded mb-2 border border-gray-300"></div>
+                                     <div className="text-center text-black font-bold">{t('theme_light')}</div>
+                                 </div>
+                                 <div 
+                                    onClick={() => setDarkMode(true)} 
+                                    className={`flex-1 p-4 bg-[#2B2D31] rounded-lg cursor-pointer border-2 ${darkMode ? 'border-green-500' : 'border-transparent'}`}
+                                 >
+                                     <div className="w-full h-24 bg-[#313338] rounded mb-2"></div>
+                                     <div className="text-center text-white font-bold">{t('theme_dark')}</div>
+                                 </div>
+                             </div>
+                         </div>
+                         <div className="mb-8">
+                             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">Retro Mode</h3>
+                             <div className="flex items-center justify-between p-4 bg-[#2B2D31] rounded-lg border border-[#1F2023]">
+                                 <div className="flex items-center gap-3">
+                                     <Monitor className="text-blue-400" />
+                                     <div>
+                                         <div className="text-white font-medium">Windows XP Theme</div>
+                                         <div className="text-xs text-gray-400">Experience the nostalgia of 2001</div>
+                                     </div>
+                                 </div>
+                                 <button 
+                                     onClick={() => setAppTheme('xp')}
+                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
+                                 >
+                                     Switch to XP
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 )}
+                 {settingsTab === 'language' && (
+                     <div className="max-w-2xl">
+                         <h2 className="text-xl font-bold text-white mb-6">{t('set_language')}</h2>
+                         <div className="space-y-2">
+                             {[
+                                 { code: 'he', label: 'עברית', native: 'Hebrew' },
+                                 { code: 'en', label: 'English', native: 'US' }
+                             ].map((lang) => (
+                                 <div 
+                                    key={lang.code}
+                                    onClick={() => setLanguage(lang.code as any)}
+                                    className={`flex items-center justify-between p-4 rounded bg-[#2B2D31] cursor-pointer border ${language === lang.code ? 'border-green-500' : 'border-transparent hover:bg-[#35373C]'}`}
+                                 >
+                                     <span className="text-white">{lang.label}</span>
+                                     {language === lang.code && <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-[#2B2D31]"></div>}
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                 )}
+             </div>
+        </div>
+      );
+  };
+
+  const renderSubscription = () => {
+    // Shared Logic/Data, different render
+    if (appTheme === 'xp') {
+        return (
+            <XPWindow title="GameOn Gold">
+                <div className="p-8 bg-white h-full overflow-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {PLANS.map(plan => (
+                            <div key={plan.id} className="bg-[#ECE9D8] border-2 border-white border-r-gray-500 border-b-gray-500 p-1">
+                                <div className="border border-gray-400 p-4 h-full text-center">
+                                    <h3 className="font-bold">{plan.name}</h3>
+                                    <div className="text-xl text-[#0054E3] font-bold">${plan.price}</div>
+                                </div>
+                            </div>
                         ))}
                     </div>
                 </div>
-
-                <button 
-                    onClick={() => handleViewChange(ViewState.HOME)}
-                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-black font-bold text-lg py-4 rounded-xl mt-8 shadow-lg hover:bg-slate-800 dark:hover:bg-slate-200 transition-colors"
-                >
-                    {t('save_changes')}
-                </button>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderMatches = () => (
-    <div className="h-full flex flex-col w-full pb-20 md:pb-0">
-       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 sticky top-0 z-10 md:hidden">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('people_liked_you')}</h2>
-         <HeaderButton />
-      </div>
-      
-      <div className="p-6 md:p-10 flex-1 overflow-y-auto">
-        <h2 className="text-3xl font-bold mb-6 hidden md:block text-slate-900 dark:text-white">{t('matches_title')}</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
-            {MOCK_USERS.map((user, idx) => (
-                <div key={user.id} className="relative aspect-[3/4] rounded-2xl overflow-hidden group cursor-pointer shadow-lg hover:shadow-violet-900/20 transition-all border border-transparent hover:border-violet-500/50" onClick={() => {
-                    alert(`Opened profile: ${user.name}`);
-                }}>
-                    <img src={user.image} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" alt="" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                    
-                    <div className="absolute bottom-0 w-full p-4">
-                        <p className="font-bold text-white text-lg">{user.name}, {user.age}</p>
-                        <div className="flex gap-1 mt-2 text-xs text-slate-300">
-                            {user.games.slice(0, 3).map(g => (
-                                <span key={g.id} className="bg-slate-800/80 p-1 rounded backdrop-blur-sm">{g.icon}</span>
-                            ))}
-                        </div>
-                    </div>
-                    
-                    <div className="absolute top-3 right-3 bg-rose-500 p-2 rounded-full shadow-lg">
-                        <Heart size={14} fill="white" className="text-white" />
-                    </div>
-                </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderChatList = () => (
-    <div className="h-full flex flex-col w-full max-w-5xl mx-auto pb-20 md:pb-0">
-       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 md:bg-transparent md:pt-8 md:px-8">
-          <div className="flex items-center gap-3">
-            <h2 className="text-xl md:text-3xl font-bold text-slate-900 dark:text-white">{t('messages_title')}</h2>
-          </div>
-           <HeaderButton />
-      </div>
-      <div className="overflow-y-auto flex-1 p-0 md:p-8">
-        <div className="flex flex-col gap-2">
-            {chats.map(chat => (
-                <div 
-                    key={chat.id} 
-                    onClick={() => { setActiveChatId(chat.id); setView(ViewState.CHAT_ROOM); }}
-                    className="flex items-center gap-4 p-4 hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-pointer border-b md:border border-slate-100 dark:border-slate-800/50 transition-colors md:rounded-2xl"
-                >
-                    <div className="relative">
-                        <img src={chat.user.image} className="w-14 h-14 md:w-16 md:h-16 rounded-full object-cover" alt="" />
-                        {chat.unread > 0 && (
-                            <span className="absolute -top-1 -right-1 bg-violet-600 dark:bg-violet-500 text-white text-xs w-5 h-5 md:w-6 md:h-6 flex items-center justify-center rounded-full border-4 border-white dark:border-slate-900">
-                                {chat.unread}
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline mb-1">
-                            <h3 className="font-bold text-lg md:text-xl truncate text-slate-900 dark:text-white">{chat.user.name}</h3>
-                            <span className="text-xs md:text-sm text-slate-500">{chat.timestamp}</span>
-                        </div>
-                        <p className={`text-sm md:text-base truncate ${chat.unread > 0 ? 'text-slate-900 dark:text-white font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
-                            {chat.lastMessage}
-                        </p>
-                    </div>
-                    <ChevronRight className={`text-slate-400 hidden md:block ${language === 'he' ? 'rotate-180' : ''}`} />
-                </div>
-            ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderChatRoom = () => {
-    const activeChat = chats.find(c => c.id === activeChatId);
-    if (!activeChat) return null;
-
+            </XPWindow>
+        );
+    }
     return (
-        <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 w-full max-w-4xl mx-auto border-x border-slate-200 dark:border-slate-800 md:shadow-2xl pb-20 md:pb-0">
-            {/* Header */}
-            <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3 bg-white dark:bg-slate-900 shadow-sm md:p-4">
-                <button onClick={() => setView(ViewState.CHAT_LIST)} className={`p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-600 dark:text-white ${language === 'he' ? '' : 'rotate-180'}`}><ChevronRight /></button>
-                <img src={activeChat.user.image} className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-violet-500" alt="" />
-                <div>
-                    <h3 className="font-bold text-sm md:text-base leading-tight text-slate-900 dark:text-white">{activeChat.user.name}</h3>
-                    <span className="text-xs text-green-500 dark:text-green-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-green-500 dark:bg-green-400 rounded-full animate-pulse"></span> {t('online_now')}
-                    </span>
-                </div>
-                <div className="mr-auto" style={{ marginLeft: language === 'he' ? 'auto' : '0', marginRight: language === 'he' ? '0' : 'auto' }}>
-                    <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"><Settings className="text-slate-500 dark:text-slate-400 w-5 h-5" /></button>
-                </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-100 dark:bg-slate-950/50">
-                {activeChat.messages.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[75%] md:max-w-[60%] px-5 py-3 rounded-2xl text-sm md:text-base leading-relaxed ${
-                            msg.isMe 
-                                ? `bg-violet-600 text-white ${language === 'he' ? 'rounded-tl-none' : 'rounded-tr-none'} shadow-md shadow-violet-900/20` 
-                                : `bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 ${language === 'he' ? 'rounded-tr-none' : 'rounded-tl-none'} border border-slate-200 dark:border-slate-700 shadow-sm`
-                        }`}>
-                            {msg.text}
-                            <span className={`text-[10px] block mt-2 opacity-70 ${msg.isMe ? 'text-violet-200' : 'text-slate-500 dark:text-slate-400'} ${language === 'he' ? 'text-left' : 'text-right'}`}>
-                                {msg.timestamp}
-                            </span>
-                        </div>
+        <div className="p-8 h-full overflow-y-auto">
+            <h1 className="text-3xl font-bold text-center mb-10 text-slate-900 dark:text-white">{t('gold_title')}</h1>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                {PLANS.map((plan) => (
+                    <div key={plan.id} className={`relative rounded-2xl p-6 flex flex-col bg-white dark:bg-slate-800 border-2 ${plan.isPopular ? 'border-yellow-500 scale-105 shadow-xl z-10' : 'border-transparent shadow-lg'}`}>
+                        {plan.isPopular && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">{t('most_popular')}</div>}
+                        <h3 className={`text-xl font-bold mb-2 bg-gradient-to-r ${plan.color} bg-clip-text text-transparent`}>{plan.name}</h3>
+                        <div className="text-3xl font-bold text-slate-900 dark:text-white mb-6">${plan.price}<span className="text-sm font-normal text-slate-500"> {t('plan_per_month')}</span></div>
+                        <ul className="space-y-4 mb-8 flex-1">
+                            {plan.features.map((feature, i) => (
+                                <li key={i} className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+                                    <div className={`w-5 h-5 rounded-full bg-gradient-to-r ${plan.color} flex items-center justify-center shrink-0`}>
+                                        <Shield size={10} className="text-white" />
+                                    </div>
+                                    {feature}
+                                </li>
+                            ))}
+                        </ul>
+                        <button className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-transform hover:scale-105 bg-gradient-to-r ${plan.color}`}>{t('select_plan')}</button>
                     </div>
                 ))}
-            </div>
-
-            {/* Input */}
-            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-                <form 
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        const input = (e.target as HTMLFormElement).elements.namedItem('msg') as HTMLInputElement;
-                        handleSendMessage(input.value);
-                        input.value = '';
-                    }}
-                    className="flex gap-3 items-center"
-                >
-                    <input 
-                        name="msg"
-                        type="text" 
-                        placeholder={t('type_message')} 
-                        autoComplete="off"
-                        className="flex-1 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-full px-6 py-4 text-sm focus:outline-none focus:ring-1 focus:ring-violet-500 border border-slate-300 dark:border-slate-700 transition-all hover:border-slate-400"
-                    />
-                    <button type="submit" className="bg-violet-600 hover:bg-violet-700 text-white p-4 rounded-full transition-colors shadow-lg shadow-violet-600/30 hover:scale-105 active:scale-95">
-                        <Send size={20} className={language === 'he' ? 'transform rotate-180' : ''} />
-                    </button>
-                </form>
-            </div>
-        </div>
-    );
-  };
-
-  const renderSubscription = () => (
-    <div className="h-full overflow-y-auto bg-slate-50 dark:bg-slate-950 w-full pb-20 md:pb-0">
-        <div className="p-4 flex items-center justify-between sticky top-0 bg-white/90 dark:bg-slate-950/90 backdrop-blur z-20 md:hidden">
-             <h2 className="text-xl font-bold text-slate-900 dark:text-white">{t('upgrade_experience')}</h2>
-             <HeaderButton />
-        </div>
-        
-        <div className="p-6 md:p-12 space-y-6 max-w-6xl mx-auto pb-10">
-            <div className="text-center mb-12">
-                <h1 className="text-4xl md:text-6xl font-black mb-4 text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500">{t('gold_title')}</h1>
-                <p className="text-slate-600 dark:text-slate-400 text-lg md:text-xl max-w-2xl mx-auto">{t('gold_subtitle')}</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
-                {PLANS.map(plan => (
-                    <div 
-                        key={plan.id} 
-                        className={`relative rounded-3xl p-1 bg-gradient-to-br ${plan.color} ${plan.isPopular ? 'shadow-2xl shadow-yellow-500/20 md:-mt-8 z-10' : 'opacity-90 grayscale-[30%] hover:grayscale-0 transition-all hover:scale-105 duration-300'}`}
-                    >
-                        {plan.isPopular && (
-                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-lg uppercase tracking-wider">
-                                {t('most_popular')}
-                            </div>
-                        )}
-                        <div className="bg-white dark:bg-slate-900 rounded-[22px] p-6 md:p-8 h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
-                                <h3 className="text-2xl font-bold text-slate-900 dark:text-white">{plan.name}</h3>
-                                <div className="text-right">
-                                    <span className="text-3xl font-bold text-slate-900 dark:text-white">${plan.price}</span>
-                                    <span className="text-sm text-slate-500 block">{t('plan_per_month')}</span>
-                                </div>
-                            </div>
-                            <ul className="space-y-4 mb-8 flex-1">
-                                {plan.features.map((feat, i) => (
-                                    <li key={i} className="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-                                        <div className={`mt-0.5 min-w-[20px] h-5 rounded-full flex items-center justify-center bg-gradient-to-br ${plan.color}`}>
-                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                            </svg>
-                                        </div>
-                                        <span className="font-medium">{feat}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                            <button className={`w-full py-4 rounded-xl font-bold text-white text-lg bg-gradient-to-r ${plan.color} shadow-lg hover:opacity-90 transition-all transform active:scale-95`}>
-                                {t('select_plan')} {plan.name}
-                            </button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    </div>
-  );
-
-  const renderSettings = () => {
-    const MenuItem = ({ id, label, icon: Icon }: { id: string, label: string, icon: any }) => (
-        <button 
-            onClick={() => setSettingsTab(id)}
-            className={`flex items-center gap-3 w-full p-2.5 rounded transition-all mb-1 ${settingsTab === id ? 'bg-slate-300 dark:bg-[#3F4147] text-slate-900 dark:text-white' : 'text-slate-600 dark:text-[#949BA4] hover:bg-slate-200 dark:hover:bg-[#35373C] hover:text-slate-800 dark:hover:text-[#DBDEE1]'}`}
-        >
-            <Icon size={20} />
-            <span className="font-medium text-sm">{label}</span>
-        </button>
-    );
-
-    return (
-        <div className="flex h-full w-full bg-[#F2F3F5] dark:bg-[#313338] text-slate-900 dark:text-[#DBDEE1] font-sans pb-20 md:pb-0">
-            {/* Settings Sidebar */}
-            <div className="w-full md:w-64 bg-slate-100 dark:bg-[#2B2D31] flex flex-col pt-4 md:pt-14 px-3 shrink-0 overflow-y-auto border-r border-slate-200 dark:border-none">
-                 <div className="md:hidden flex items-center justify-between mb-4">
-                    <h2 className="font-bold text-lg dark:text-white px-2">{t('settings_title')}</h2>
-                    <HeaderButton />
-                 </div>
-
-                 <div className="px-2 mb-4">
-                    <div className="relative">
-                        <input 
-                            placeholder={t('search_settings')} 
-                            className="w-full bg-[#E3E5E8] dark:bg-[#1E1F22] p-1.5 px-3 rounded text-sm text-slate-900 dark:text-white focus:outline-none" 
-                        />
-                        <Search className={`absolute ${language === 'he' ? 'left-2' : 'right-2'} top-1.5 text-gray-500`} size={16} />
-                    </div>
-                 </div>
-
-                 <div className="px-2 mb-2">
-                    <h3 className="text-xs font-bold text-gray-500 dark:text-[#949BA4] uppercase mb-2 px-2">{t('user_settings')}</h3>
-                    <MenuItem id="account" label={t('set_account')} icon={User} />
-                    <MenuItem id="profile" label={t('set_profile')} icon={User} />
-                    <MenuItem id="privacy" label={t('set_privacy')} icon={Shield} />
-                    <MenuItem id="subscription" label={t('set_subs')} icon={Star} />
-                 </div>
-
-                 <div className="px-2 mb-2">
-                    <h3 className="text-xs font-bold text-gray-500 dark:text-[#949BA4] uppercase mb-2 px-2 mt-4">{t('app_settings')}</h3>
-                    <MenuItem id="appearance" label={t('set_appearance')} icon={Monitor} />
-                    <MenuItem id="language" label={t('set_language')} icon={Globe} />
-                    <MenuItem id="notifications" label={t('set_notifications')} icon={Bell} />
-                    <MenuItem id="devices" label={t('set_devices')} icon={Smartphone} />
-                 </div>
-
-                 <div className="mt-auto mb-4 px-2">
-                    <button className="flex items-center gap-3 w-full p-2.5 rounded text-red-500 hover:bg-red-500/10 transition-colors">
-                        <LogOut size={20} />
-                        <span className="font-medium text-sm">{t('nav_logout')}</span>
-                    </button>
-                 </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex-1 bg-white dark:bg-[#313338] p-6 md:p-14 overflow-y-auto">
-                <div className="max-w-3xl">
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
-                        {settingsTab === 'account' && t('set_account')}
-                        {settingsTab === 'profile' && t('set_profile')}
-                        {settingsTab === 'appearance' && t('set_appearance')}
-                        {settingsTab === 'language' && t('set_language')}
-                        {settingsTab === 'privacy' && t('set_privacy')}
-                        {settingsTab === 'subscription' && t('set_subs')}
-                    </h2>
-
-                    {settingsTab === 'language' && (
-                        <div className="space-y-6">
-                            <h3 className="text-xs font-bold text-gray-500 dark:text-[#B5BAC1] uppercase mb-4">{t('choose_lang')}</h3>
-                            <div className="bg-[#F2F3F5] dark:bg-[#2B2D31] rounded-lg p-1 max-w-lg">
-                                {[
-                                    { code: 'he', label: 'עברית', flag: '🇮🇱' },
-                                    { code: 'en', label: 'English', flag: '🇺🇸' },
-                                    { code: 'es', label: 'Español', flag: '🇪🇸' },
-                                    { code: 'fr', label: 'Français', flag: '🇫🇷' }
-                                ].map((lang) => (
-                                    <button
-                                        key={lang.code}
-                                        onClick={() => setLanguage(lang.code as any)}
-                                        className={`w-full flex items-center justify-between p-4 rounded-md transition-all ${language === lang.code ? 'bg-white dark:bg-[#404249] shadow-sm' : 'hover:bg-gray-200 dark:hover:bg-[#35373C]'}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">{lang.flag}</span>
-                                            <span className={`font-medium ${language === lang.code ? 'text-slate-900 dark:text-white' : 'text-slate-600 dark:text-[#949BA4]'}`}>{lang.label}</span>
-                                        </div>
-                                        {language === lang.code && (
-                                            <div className="w-5 h-5 bg-green-500 rounded-full border-2 border-white dark:border-[#313338] flex items-center justify-center">
-                                                <div className="w-2 h-2 bg-white rounded-full" />
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {settingsTab === 'appearance' && (
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-xs font-bold text-gray-500 dark:text-[#B5BAC1] uppercase mb-4">{t('theme')}</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div 
-                                        onClick={() => setDarkMode(false)}
-                                        className={`cursor-pointer border-2 rounded-lg p-4 flex flex-col items-center gap-3 bg-white ${!darkMode ? 'border-violet-500 ring-2 ring-violet-500/20' : 'border-gray-200 dark:border-[#1E1F22]'}`}
-                                    >
-                                        <div className="w-full h-24 bg-[#F2F3F5] rounded flex items-center justify-center">
-                                            <div className="bg-white w-3/4 h-3/4 rounded shadow-sm"></div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Sun size={16} />
-                                            <span className="font-medium">{t('theme_light')}</span>
-                                        </div>
-                                    </div>
-
-                                    <div 
-                                        onClick={() => setDarkMode(true)}
-                                        className={`cursor-pointer border-2 rounded-lg p-4 flex flex-col items-center gap-3 bg-[#2B2D31] ${darkMode ? 'border-violet-500 ring-2 ring-violet-500/20' : 'border-gray-200 dark:border-[#1E1F22]'}`}
-                                    >
-                                        <div className="w-full h-24 bg-[#313338] rounded flex items-center justify-center">
-                                             <div className="bg-[#2B2D31] w-3/4 h-3/4 rounded shadow-sm"></div>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-white">
-                                            <Moon size={16} />
-                                            <span className="font-medium">{t('theme_dark')}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {settingsTab === 'account' && (
-                         <div className="bg-[#F2F3F5] dark:bg-[#2B2D31] rounded-lg p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center gap-4">
-                                    <img src={myProfile.image} className="w-20 h-20 rounded-full object-cover border-4 border-[#313338]" alt="" />
-                                    <div>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white">{myProfile.name}</h3>
-                                        <p className="text-gray-500 text-sm">#{Math.floor(Math.random() * 9000) + 1000}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => handleViewChange(ViewState.PROFILE)} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
-                                    {t('edit_profile_title')}
-                                </button>
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <div className="bg-white dark:bg-[#1E1F22] p-4 rounded flex justify-between items-center">
-                                    <div>
-                                        <p className="text-xs uppercase font-bold text-gray-500 mb-1">{t('username')}</p>
-                                        <p className="text-slate-900 dark:text-white font-medium">{myProfile.name}</p>
-                                    </div>
-                                    <button className="bg-slate-200 dark:bg-[#313338] hover:bg-slate-300 dark:hover:bg-[#404249] px-4 py-1.5 rounded text-sm transition-colors text-slate-900 dark:text-white">{t('edit')}</button>
-                                </div>
-                                <div className="bg-white dark:bg-[#1E1F22] p-4 rounded flex justify-between items-center">
-                                    <div>
-                                        <p className="text-xs uppercase font-bold text-gray-500 mb-1">{t('email')}</p>
-                                        <p className="text-slate-900 dark:text-white font-medium">gamer@example.com</p>
-                                    </div>
-                                    <button className="bg-slate-200 dark:bg-[#313338] hover:bg-slate-300 dark:hover:bg-[#404249] px-4 py-1.5 rounded text-sm transition-colors text-slate-900 dark:text-white">{t('edit')}</button>
-                                </div>
-                                <div className="bg-white dark:bg-[#1E1F22] p-4 rounded flex justify-between items-center">
-                                    <div>
-                                        <p className="text-xs uppercase font-bold text-gray-500 mb-1">{t('phone')}</p>
-                                        <p className="text-slate-900 dark:text-white font-medium">*********05</p>
-                                    </div>
-                                    <button className="bg-slate-200 dark:bg-[#313338] hover:bg-slate-300 dark:hover:bg-[#404249] px-4 py-1.5 rounded text-sm transition-colors text-slate-900 dark:text-white">{t('edit')}</button>
-                                </div>
-                            </div>
-                         </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Right Panel (Active Now style from image) */}
-            <div className="hidden xl:block w-80 bg-slate-100 dark:bg-[#2B2D31] p-4 border-l border-slate-200 dark:border-[#1E1F22]">
-                <h3 className="font-bold text-xl mb-4 text-slate-900 dark:text-white">{t('preview_title')}</h3>
-                
-                {/* Mini Profile Card */}
-                <div className="bg-white dark:bg-[#111214] rounded-lg p-0 overflow-hidden shadow-lg border border-slate-200 dark:border-none">
-                     <div className="h-16 bg-violet-600"></div>
-                     <div className="px-4 pb-4">
-                        <div className="relative -mt-8 mb-3">
-                             <img src={myProfile.image} className="w-16 h-16 rounded-full border-4 border-white dark:border-[#111214]" alt="" />
-                             <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-[#111214]"></div>
-                        </div>
-                        <h4 className="font-bold text-lg text-slate-900 dark:text-white">{myProfile.name}</h4>
-                        <p className="text-sm text-gray-500 dark:text-[#B5BAC1] mb-4 border-b border-gray-200 dark:border-[#2F3136] pb-3">
-                            {myProfile.bio}
-                        </p>
-                        
-                        <h5 className="uppercase text-xs font-bold text-gray-500 dark:text-[#B5BAC1] mb-2">{t('playing_on')}</h5>
-                        <div className="flex gap-2 mb-4">
-                            {myProfile.platforms.map(p => (
-                                <div key={p} className="bg-slate-100 dark:bg-[#2F3136] p-1.5 rounded text-slate-600 dark:text-[#B5BAC1]">
-                                    <Gamepad2 size={16} />
-                                </div>
-                            ))}
-                        </div>
-                     </div>
-                </div>
-
-                <div className="mt-6 bg-slate-200 dark:bg-[#1E1F22] rounded-lg p-4">
-                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">{t('active_now')}</h4>
-                    <div className="flex items-center gap-3">
-                         <div className="w-10 h-10 rounded bg-green-600 flex items-center justify-center text-white">
-                             <Gamepad2 />
-                         </div>
-                         <div>
-                             <p className="text-sm font-bold text-slate-900 dark:text-white">Warzone</p>
-                             <p className="text-xs text-gray-500">{t('playing_for')} 2h</p>
-                         </div>
-                    </div>
-                </div>
             </div>
         </div>
     );
   };
 
   return (
-    <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-sans overflow-hidden transition-colors duration-200">
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex flex-col w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-6 shrink-0 relative z-20 shadow-2xl transition-colors duration-200">
-         <SidebarContent />
-      </aside>
+    <div className={`flex flex-col h-screen w-full font-sans overflow-hidden ${appTheme === 'modern' ? (darkMode ? 'dark bg-slate-900' : 'bg-slate-100') : ''}`}>
+      
+      {/* Container */}
+      <div className="flex-1 flex overflow-hidden">
+          
+          {/* Sidebars */}
+          <aside className="hidden md:block shrink-0 h-full relative z-10">
+              {appTheme === 'xp' ? <XPSidebar /> : <ModernSidebar />}
+          </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 relative overflow-hidden flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-200">
-         {/* Views */}
-         {view === ViewState.HOME && renderHome()}
-         {view === ViewState.PROFILE && renderProfile()}
-         {view === ViewState.MATCHES && renderMatches()}
-         {view === ViewState.CHAT_LIST && renderChatList()}
-         {view === ViewState.CHAT_ROOM && renderChatRoom()}
-         {view === ViewState.SUBSCRIPTION && renderSubscription()}
-         {view === ViewState.SETTINGS && renderSettings()}
-         
-         {/* Mobile Bottom Navigation */}
-         <BottomNav />
-         
-         {/* Mobile Drawer */}
-         <MobileMenu />
-      </main>
+          {/* Main Area */}
+          <main className={`flex-1 overflow-hidden relative ${appTheme === 'xp' ? 'p-2 md:p-8 pb-12' : 'pb-16 md:pb-0'}`}>
+              {view === ViewState.HOME && renderHome()}
+              {view === ViewState.PROFILE && renderProfile()}
+              {view === ViewState.MATCHES && renderMatches()}
+              {view === ViewState.CHAT_LIST && renderChatList()}
+              {view === ViewState.CHAT_ROOM && renderChatRoom()}
+              {view === ViewState.SUBSCRIPTION && renderSubscription()}
+              {view === ViewState.SETTINGS && renderSettings()}
+          </main>
+      </div>
+
+      {/* Navigations */}
+      {appTheme === 'xp' ? <XPTaskbar /> : <div className="md:hidden"><ModernBottomNav /></div>}
+      
+      {/* Mobile Drawer (XP Only) */}
+      {isMobileMenuOpen && appTheme === 'xp' && (
+        <div className="fixed bottom-10 left-0 bg-white border-2 border-[#0054E3] rounded-t-lg shadow-2xl z-50 w-64">
+             <div className="bg-[#245DDA] p-2 flex items-center gap-2 rounded-t text-white font-bold border-b-2 border-[#E68B2C]">
+                 <img src={myProfile.image} className="w-10 h-10 rounded border-2 border-white" alt="" />
+                 <span>{myProfile.name}</span>
+             </div>
+             <div className="flex">
+                 <div className="w-1/2 bg-white p-2 text-sm text-black space-y-2 border-r border-gray-200">
+                     <div onClick={() => { setView(ViewState.HOME); setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer font-bold">Internet</div>
+                     <div onClick={() => { setView(ViewState.SETTINGS); setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer">Settings</div>
+                 </div>
+                 <div className="w-1/2 bg-[#D3E5FA] p-2 text-sm text-[#1E3C7B] space-y-2">
+                     <div onClick={() => { setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer">Log Off</div>
+                 </div>
+             </div>
+        </div>
+      )}
     </div>
   );
 };

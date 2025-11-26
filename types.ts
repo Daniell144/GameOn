@@ -8,6 +8,8 @@ export enum ViewState {
   SETTINGS = 'SETTINGS'
 }
 
+export type AppTheme = 'xp' | 'modern';
+
 export enum Platform {
   PC = 'PC',
   PS5 = 'PlayStation 5',
