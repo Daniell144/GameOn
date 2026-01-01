@@ -1,70 +1,207 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
-  Menu, X, Heart, Star, User, MessageCircle, 
+  X, Heart, Star, User, MessageCircle, 
   Gamepad2, ChevronRight, Camera, 
-  Settings, MapPin, Send, Plus, Moon, Sun, LogOut,
-  Shield, Bell, Smartphone, Monitor, Globe, Search, Minimize2, Maximize2, Layout
+  Settings, Send, Sun, Moon, Shield, Globe, Search, Users, ChevronLeft,
+  Monitor, ChevronDown, Coins, Trophy, CalendarCheck, CheckCircle2, ShoppingBag, Palette, Check, Eye, EyeOff, Sparkles, Layout, Gem, FilterX, SearchCode
 } from 'lucide-react';
-import { ViewState, UserProfile, ChatThread, Platform, AppTheme } from './types';
-import { INITIAL_PROFILE, MOCK_USERS, MOCK_CHATS, PLANS, CURRENT_USER_ID, TRANSLATIONS } from './constants';
-import { GameCard } from './components/GameCard';
+import { ViewState, UserProfile, ChatThread, Theme, Cosmetic } from './types';
+import { INITIAL_PROFILE, MOCK_USERS, MOCK_CHATS, PLANS, CURRENT_USER_ID, TRANSLATIONS, POPULAR_GAMES, SHOP_THEMES, PROFILE_COSMETICS } from './constants';
 
 const App = () => {
   const [view, setView] = useState<ViewState>(ViewState.HOME);
-  const [appTheme, setAppTheme] = useState<AppTheme>('xp');
-  const [myProfile, setMyProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [shopTab, setShopTab] = useState<'themes' | 'borders' | 'colors'>('themes');
+  const [myProfile, setMyProfile] = useState<UserProfile>(() => {
+    const saved = localStorage.getItem('gameon_profile');
+    return saved ? JSON.parse(saved) : INITIAL_PROFILE;
+  });
   const [swipeIndex, setSwipeIndex] = useState(0);
   const [chats, setChats] = useState<ChatThread[]>(MOCK_CHATS);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [matchAnimation, setMatchAnimation] = useState<'left' | 'right' | 'up' | null>(null);
-  const [darkMode, setDarkMode] = useState(true);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('gameon_dark_mode') === 'true';
+  });
   const [settingsTab, setSettingsTab] = useState('appearance');
   const [language, setLanguage] = useState<'he' | 'en'>('he');
+  const [isGameDropdownOpen, setIsGameDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // --- Helpers ---
+  // Currency (Crystals/Diamonds) State
+  const [userCurrency, setUserCurrency] = useState(() => {
+    const saved = localStorage.getItem('gameon_currency');
+    const oldSaved = localStorage.getItem('gameon_points');
+    return saved ? parseInt(saved, 10) : (oldSaved ? parseInt(oldSaved, 10) : 200);
+  });
+  const [sentMessagesCounter, setSentMessagesCounter] = useState(() => {
+    const saved = localStorage.getItem('gameon_msg_counter');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  // Daily Login System State
+  const [loginStreak, setLoginStreak] = useState(() => {
+    const saved = localStorage.getItem('gameon_login_streak');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [lastLoginDate, setLastLoginDate] = useState(() => {
+    return localStorage.getItem('gameon_last_login');
+  });
+  const [superLikesCount, setSuperLikesCount] = useState(() => {
+    const saved = localStorage.getItem('gameon_super_likes');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [showRewardModal, setShowRewardModal] = useState(false);
+
+  // Shop States
+  const [unlockedThemeIds, setUnlockedThemeIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('gameon_unlocked_themes');
+    return saved ? JSON.parse(saved) : ['default', 'light', 'dark'];
+  });
+  const [unlockedCosmeticIds, setUnlockedCosmeticIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('gameon_unlocked_cosmetics');
+    return saved ? JSON.parse(saved) : ['border-basic', 'color-white'];
+  });
+  const [activeThemeId, setActiveThemeId] = useState(() => {
+    return localStorage.getItem('gameon_active_theme') || 'light';
+  });
+  const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
+
+  // Discovery Filters
+  const [onlyMutual, setOnlyMutual] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+
   const t = (key: string) => {
-    const lang = (language === 'he' || language === 'en') ? language : 'en'; 
-    return TRANSLATIONS[lang][key] || key;
+    return TRANSLATIONS[language][key] || key;
   };
+
+  const handleSetView = (newView: ViewState) => {
+    if (view === ViewState.SHOP && newView !== ViewState.SHOP) {
+      setPreviewThemeId(null);
+    }
+    setView(newView);
+  };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsGameDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     document.documentElement.dir = language === 'he' ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
-  }, [language]);
+    if (darkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  }, [language, darkMode]);
 
   useEffect(() => {
-    // Manage Body Classes for Theme
-    document.body.className = '';
-    if (appTheme === 'xp') {
-      document.body.classList.add('theme-xp');
+    const themeToApply = previewThemeId || activeThemeId;
+    const themeObj = SHOP_THEMES.find(t => t.id === themeToApply) || SHOP_THEMES[0];
+    
+    // Remove all theme classes first
+    SHOP_THEMES.forEach(theme => document.body.classList.remove(theme.accentClass));
+    // Apply the current theme class
+    document.body.classList.add(themeObj.accentClass);
+    
+    // Auto-toggle dark mode for core themes if not in preview
+    if (!previewThemeId) {
+      if (activeThemeId === 'light') setDarkMode(false);
+      if (activeThemeId === 'dark') setDarkMode(true);
     } else {
-      document.body.classList.add('theme-modern');
-      if (darkMode) document.body.classList.add('dark');
+      if (previewThemeId === 'light') setDarkMode(false);
+      if (previewThemeId === 'dark') setDarkMode(true);
     }
-  }, [appTheme, darkMode]);
+  }, [activeThemeId, previewThemeId]);
+
+  useEffect(() => {
+    localStorage.setItem('gameon_currency', userCurrency.toString());
+    localStorage.setItem('gameon_msg_counter', sentMessagesCounter.toString());
+    localStorage.setItem('gameon_login_streak', loginStreak.toString());
+    localStorage.setItem('gameon_super_likes', superLikesCount.toString());
+    localStorage.setItem('gameon_unlocked_themes', JSON.stringify(unlockedThemeIds));
+    localStorage.setItem('gameon_unlocked_cosmetics', JSON.stringify(unlockedCosmeticIds));
+    localStorage.setItem('gameon_profile', JSON.stringify(myProfile));
+    localStorage.setItem('gameon_active_theme', activeThemeId);
+    localStorage.setItem('gameon_dark_mode', darkMode.toString());
+    if (lastLoginDate) localStorage.setItem('gameon_last_login', lastLoginDate);
+  }, [userCurrency, sentMessagesCounter, loginStreak, superLikesCount, lastLoginDate, unlockedThemeIds, unlockedCosmeticIds, myProfile, activeThemeId, darkMode]);
+
+  useEffect(() => {
+    const today = new Date().toDateString();
+    if (lastLoginDate !== today) {
+      handleDailyLogin(today);
+    }
+  }, []);
+
+  const handleDailyLogin = (todayStr: string) => {
+    setLastLoginDate(todayStr);
+    const newStreak = loginStreak >= 7 ? 1 : loginStreak + 1;
+    setLoginStreak(newStreak);
+    setUserCurrency(prev => prev + 1);
+    if (newStreak === 7) setSuperLikesCount(prev => prev + 1);
+    setShowRewardModal(true);
+  };
+
+  const handlePurchaseTheme = (theme: Theme) => {
+    if (userCurrency >= theme.cost) {
+      setUserCurrency(prev => prev - theme.cost);
+      setUnlockedThemeIds(prev => [...prev, theme.id]);
+      setPreviewThemeId(null);
+    } else {
+      alert(t('not_enough_points'));
+    }
+  };
+
+  const handlePurchaseCosmetic = (cosmetic: Cosmetic) => {
+    if (userCurrency >= cosmetic.cost) {
+      setUserCurrency(prev => prev - cosmetic.cost);
+      setUnlockedCosmeticIds(prev => [...prev, cosmetic.id]);
+    } else {
+      alert(t('not_enough_points'));
+    }
+  };
+
+  const handleEquipCosmetic = (cosmetic: Cosmetic) => {
+    if (cosmetic.type === 'BORDER') {
+      setMyProfile(prev => ({ ...prev, equippedBorderId: cosmetic.id }));
+    } else {
+      setMyProfile(prev => ({ ...prev, equippedNameColorId: cosmetic.id }));
+    }
+  };
+
+  const filteredDiscoveryUsers = useMemo(() => {
+    let users = MOCK_USERS;
+    if (onlyMutual) {
+      const myGameIds = myProfile.games.map(g => g.id);
+      users = users.filter(u => u.games.some(uGame => myGameIds.includes(uGame.id)));
+    }
+    if (selectedGameId) {
+      users = users.filter(u => u.games.some(g => g.id === selectedGameId));
+    }
+    return users;
+  }, [onlyMutual, selectedGameId, myProfile.games]);
+
+  const activeUser = filteredDiscoveryUsers.length > 0 
+    ? filteredDiscoveryUsers[swipeIndex % filteredDiscoveryUsers.length] 
+    : null;
 
   const handleSwipe = useCallback((direction: 'left' | 'right' | 'up') => {
-    if (matchAnimation) return;
+    if (matchAnimation || filteredDiscoveryUsers.length === 0) return;
+    if (direction === 'up' && superLikesCount > 0) setSuperLikesCount(prev => prev - 1);
     setMatchAnimation(direction);
     setTimeout(() => {
-      setSwipeIndex((prev) => (prev + 1) % MOCK_USERS.length);
+      setSwipeIndex((prev) => (prev + 1) % filteredDiscoveryUsers.length);
       setMatchAnimation(null);
     }, 300);
-  }, [matchAnimation]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (view !== ViewState.HOME) return;
-      switch(e.key) {
-        case 'ArrowLeft': handleSwipe('left'); break;
-        case 'ArrowRight': handleSwipe('right'); break;
-        case 'ArrowUp': handleSwipe('up'); break;
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [view, handleSwipe]);
+  }, [matchAnimation, filteredDiscoveryUsers.length, superLikesCount]);
 
   const handleUpdateProfile = (field: keyof UserProfile, value: any) => {
     setMyProfile(prev => ({ ...prev, [field]: value }));
@@ -80,6 +217,13 @@ const App = () => {
       isMe: true
     };
     setChats(prev => prev.map(chat => chat.id === activeChatId ? { ...chat, messages: [...chat.messages, newMessage], lastMessage: text, timestamp: newMessage.timestamp } : chat));
+    const nextCounter = sentMessagesCounter + 1;
+    if (nextCounter >= 10) {
+      setUserCurrency(prev => prev + 10);
+      setSentMessagesCounter(0);
+    } else {
+      setSentMessagesCounter(nextCounter);
+    }
     setTimeout(() => {
         const replyMessage = {
             id: (Date.now() + 1).toString(),
@@ -92,146 +236,51 @@ const App = () => {
     }, 1500);
   };
 
-  // ==========================================
-  // XP THEME COMPONENTS
-  // ==========================================
+  const equippedBorder = PROFILE_COSMETICS.find(c => c.id === myProfile.equippedBorderId);
+  const equippedNameColor = PROFILE_COSMETICS.find(c => c.id === myProfile.equippedNameColorId);
 
-  const XPWindow = ({ title, children, className = '', noPadding = false }: { title: string, children: React.ReactNode, className?: string, noPadding?: boolean }) => (
-    <div className={`flex flex-col h-full bg-[#ECE9D8] rounded-t-lg shadow-2xl border border-[#0054E3] overflow-hidden ${className}`}>
-        <div className="bg-gradient-to-r from-[#0058EE] via-[#245DDA] to-[#3A93FF] px-3 py-2 flex justify-between items-center select-none shrink-0">
-            <span className="text-white font-bold text-sm drop-shadow flex items-center gap-2 truncate">
-               <img src="https://w7.pngwing.com/pngs/382/204/png-transparent-globe-world-computer-icons-globe-miscellaneous-blue-globe.png" className="w-4 h-4" alt="" />
-               {title}
-            </span>
-            <div className="flex gap-1">
-                <button className="w-5 h-5 bg-[#D6D3CE] rounded-[3px] border border-white border-r-gray-500 border-b-gray-500 flex items-center justify-center hover:bg-[#eaeaea] active:border-gray-500 active:border-r-white active:border-b-white">
-                    <Minimize2 size={12} className="text-black opacity-60" />
-                </button>
-                <button className="w-5 h-5 bg-[#D6D3CE] rounded-[3px] border border-white border-r-gray-500 border-b-gray-500 flex items-center justify-center hover:bg-[#eaeaea] active:border-gray-500 active:border-r-white active:border-b-white">
-                    <Maximize2 size={12} className="text-black opacity-60" />
-                </button>
-                <button 
-                    onClick={() => setView(ViewState.HOME)}
-                    className="w-5 h-5 bg-[#E53E30] rounded-[3px] border border-[#ff8d86] border-r-[#961b12] border-b-[#961b12] flex items-center justify-center text-white hover:bg-[#ff5a4d] active:bg-[#b02b20]"
-                >
-                    <X size={14} strokeWidth={3} />
-                </button>
-            </div>
-        </div>
-        <div className="bg-[#ECE9D8] border-b border-gray-400 flex items-center px-1 py-0.5 text-xs text-black shrink-0">
-            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">File</span>
-            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">View</span>
-            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">Tools</span>
-            <span className="px-2 py-1 hover:bg-[#316AC5] hover:text-white cursor-default">Help</span>
-        </div>
-        <div className={`flex-1 overflow-auto bg-white ${noPadding ? '' : 'p-4'} text-black scrollbar-xp`}>
-            {children}
-        </div>
-    </div>
-  );
-
-  const XPButton = ({ onClick, children, active = false }: any) => (
-      <button 
-        onClick={onClick}
-        className={`px-4 py-2 text-sm font-normal text-black transition-none
-        ${active ? 'font-bold bg-white' : 'bg-transparent'}
-        hover:underline hover:text-[#0054E3] cursor-pointer flex items-center gap-2 w-full`}
-      >
-        {children}
-      </button>
-  );
-
-  const XPSidebar = () => (
-    <div className="w-64 bg-[#7A96DF] bg-gradient-to-b from-[#7A96DF] to-[#98B4E2] p-3 flex flex-col gap-4 overflow-y-auto h-full">
-        <div className="rounded-t-lg overflow-hidden bg-white shadow-md">
-            <div className="bg-gradient-to-r from-white to-[#C6D3F7] p-1">
-                 <div className="bg-gradient-to-r from-[#225ACA] to-[#88A9E6] px-3 py-1 rounded-t-md flex justify-between items-center cursor-pointer">
-                    <span className="text-white font-bold text-sm">System Tasks</span>
-                    <ChevronRight className="text-white w-3 h-3 rotate-90" />
-                 </div>
-            </div>
-            <div className="bg-[#D6DFF7] p-2 space-y-1">
-                <XPButton onClick={() => setView(ViewState.HOME)} active={view === ViewState.HOME}><Gamepad2 size={16} /> {t('nav_discover')}</XPButton>
-                <XPButton onClick={() => setView(ViewState.PROFILE)} active={view === ViewState.PROFILE}><User size={16} /> {t('nav_profile')}</XPButton>
-                <XPButton onClick={() => setView(ViewState.SETTINGS)} active={view === ViewState.SETTINGS}><Settings size={16} /> {t('nav_settings')}</XPButton>
-            </div>
-        </div>
-        <div className="rounded-t-lg overflow-hidden bg-white shadow-md">
-            <div className="bg-gradient-to-r from-white to-[#C6D3F7] p-1">
-                 <div className="bg-gradient-to-r from-[#225ACA] to-[#88A9E6] px-3 py-1 rounded-t-md flex justify-between items-center cursor-pointer">
-                    <span className="text-white font-bold text-sm">Other Places</span>
-                    <ChevronRight className="text-white w-3 h-3 rotate-90" />
-                 </div>
-            </div>
-            <div className="bg-[#D6DFF7] p-2 space-y-1">
-                <XPButton onClick={() => setView(ViewState.MATCHES)} active={view === ViewState.MATCHES}><Heart size={16} /> {t('nav_matches')}</XPButton>
-                <XPButton onClick={() => setView(ViewState.CHAT_LIST)} active={view === ViewState.CHAT_LIST}><MessageCircle size={16} /> {t('nav_chats')}</XPButton>
-                <XPButton onClick={() => setView(ViewState.SUBSCRIPTION)} active={view === ViewState.SUBSCRIPTION}><Star size={16} /> {t('nav_subs')}</XPButton>
-            </div>
-        </div>
-    </div>
-  );
-
-  const XPTaskbar = () => (
-    <div className="fixed bottom-0 left-0 right-0 h-10 bg-[#245DDA] border-t-2 border-[#3A93FF] flex items-center px-1 z-50 shadow-2xl">
-        <button 
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="h-8 px-2 bg-[#3C9E36] hover:bg-[#4CB845] rounded-r-[10px] rounded-l-md flex items-center gap-2 shadow-[inset_1px_1px_0px_rgba(255,255,255,0.5)] border border-[#2B7924] mr-2 ml-0"
-            style={{ 
-                background: 'linear-gradient(to bottom, #3C9E36 0%, #3C9E36 50%, #2B7924 100%)',
-                boxShadow: '2px 2px 2px rgba(0,0,0,0.5)'
-            }}
-        >
-            <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center text-[#E53E30] italic font-serif font-black shadow-inner border border-red-200">W</div>
-            <span className="text-white font-bold italic text-shadow pr-2">Start</span>
-        </button>
-        <div className="h-full border-r border-[#1B46A0] border-l border-[#3A93FF] mx-1"></div>
-        <div className="flex-1 flex gap-1 px-1 overflow-x-auto">
-             {[
-               { v: ViewState.HOME, i: <Gamepad2 size={16}/>, l: t('bn_home') },
-               { v: ViewState.MATCHES, i: <Heart size={16}/>, l: t('bn_matches') },
-               { v: ViewState.CHAT_LIST, i: <MessageCircle size={16}/>, l: t('bn_chat') },
-               { v: ViewState.SUBSCRIPTION, i: <Star size={16}/>, l: t('bn_subs') }
-             ].map(item => (
-                <button key={item.v} onClick={() => setView(item.v)} className={`flex items-center gap-2 px-4 h-8 rounded text-white text-xs ${view === item.v ? 'bg-[#1845A3] shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)]' : 'hover:bg-[#316AC5]'}`}>
-                    {item.i} {item.l}
-                </button>
-             ))}
-        </div>
-        <div className="bg-[#0B9CEE] h-full px-3 flex items-center gap-2 border-l border-[#194086] border-t border-[#194086] shadow-inner ml-auto">
-             <span className="text-white text-xs">{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-        </div>
-    </div>
-  );
-
-  // ==========================================
-  // MODERN THEME COMPONENTS
-  // ==========================================
+  const selectedGame = useMemo(() => POPULAR_GAMES.find(g => g.id === selectedGameId), [selectedGameId]);
 
   const ModernSidebar = () => (
-    <div className="w-20 lg:w-64 bg-slate-900 dark:bg-black border-r border-slate-800 flex flex-col h-full shrink-0 transition-all duration-300">
-        <div className="p-4 flex items-center gap-3 border-b border-slate-800">
+    <div className="w-20 lg:w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full shrink-0 transition-all duration-300 relative z-10">
+        <div className="p-4 flex items-center gap-3 border-b border-slate-200 dark:border-slate-800">
             <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/20">
                 <Gamepad2 className="text-white w-6 h-6" />
             </div>
-            <span className="font-bold text-xl text-white hidden lg:block tracking-tight">GameOn</span>
+            <span className="font-bold text-xl text-slate-900 dark:text-white hidden lg:block tracking-tight">GameOn</span>
         </div>
-        <div className="flex-1 p-3 space-y-2">
+        
+        <div className="px-4 pt-6 pb-2 hidden lg:block space-y-4">
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-500">
+                        <Gem size={18} />
+                    </div>
+                    <div className="flex-1">
+                        <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{t('currency')}</div>
+                        <div className="text-lg font-black text-slate-900 dark:text-white leading-tight">{userCurrency}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex-1 p-3 space-y-2 overflow-y-auto">
             {[
                 { v: ViewState.HOME, i: Gamepad2, l: t('nav_discover') },
                 { v: ViewState.MATCHES, i: Heart, l: t('nav_matches') },
                 { v: ViewState.CHAT_LIST, i: MessageCircle, l: t('nav_chats') },
+                { v: ViewState.SHOP, i: ShoppingBag, l: t('nav_shop') },
                 { v: ViewState.SUBSCRIPTION, i: Star, l: t('nav_subs') },
                 { v: ViewState.PROFILE, i: User, l: t('nav_profile') },
                 { v: ViewState.SETTINGS, i: Settings, l: t('nav_settings') },
             ].map((item) => (
                 <button
                     key={item.v}
-                    onClick={() => setView(item.v)}
+                    onClick={() => handleSetView(item.v)}
                     className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all duration-200
                     ${view === item.v 
                         ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'}`}
                 >
                     <item.i size={24} />
                     <span className="hidden lg:block font-medium">{item.l}</span>
@@ -247,12 +296,11 @@ const App = () => {
             { v: ViewState.HOME, i: Gamepad2, l: t('bn_home') },
             { v: ViewState.MATCHES, i: Heart, l: t('bn_matches') },
             { v: ViewState.CHAT_LIST, i: MessageCircle, l: t('bn_chat') },
-            { v: ViewState.SUBSCRIPTION, i: Star, l: t('bn_subs') },
             { v: ViewState.PROFILE, i: User, l: t('bn_profile') },
         ].map(item => (
             <button
                 key={item.v}
-                onClick={() => setView(item.v)}
+                onClick={() => handleSetView(item.v)}
                 className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors
                 ${view === item.v ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'}`}
             >
@@ -263,493 +311,460 @@ const App = () => {
     </div>
   );
 
-  // ==========================================
-  // VIEW RENDERERS (Adaptable)
-  // ==========================================
+  const renderShop = () => {
+    const borders = PROFILE_COSMETICS.filter(c => c.type === 'BORDER');
+    const colors = PROFILE_COSMETICS.filter(c => c.type === 'NAME_COLOR');
 
-  const renderHome = () => {
-    const activeUser = MOCK_USERS[swipeIndex];
-    
-    if (appTheme === 'xp') {
-        return (
-            <XPWindow title="GameOn Discovery" className="max-w-4xl mx-auto h-[600px] my-auto">
-                <div className="flex h-full">
-                    <div className="w-1/3 bg-[#D6DFF7] border-r border-white p-4 hidden md:block">
-                        <h3 className="font-bold text-[#1E3C7B] mb-2">{t('nav_discover')}</h3>
-                        <div className="mt-8 bg-white border border-gray-400 p-2 shadow-sm">
-                            <img src={activeUser.image} className="w-full h-auto object-cover border border-gray-600 mb-2" alt="" />
-                            <div className="text-center font-bold">{activeUser.name}</div>
-                        </div>
-                    </div>
-                    <div className="flex-1 bg-white p-8 flex flex-col items-center justify-center relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-                         <div className={`relative bg-[#ECE9D8] border-2 border-white shadow-[2px_2px_0px_0px_rgba(0,0,0,0.5)] p-1 w-full max-w-sm transform transition-all duration-300
-                            ${matchAnimation === 'left' ? '-translate-x-full rotate-[-10deg] opacity-0' : ''}
-                            ${matchAnimation === 'right' ? 'translate-x-full rotate-[10deg] opacity-0' : ''}
-                            ${matchAnimation === 'up' ? '-translate-y-full opacity-0' : ''}
-                         `}>
-                            <div className="bg-gradient-to-r from-[#0058EE] to-[#3A93FF] text-white px-2 py-1 font-bold flex justify-between">
-                                <span>{activeUser.name}.exe</span>
-                                <X size={16} />
-                            </div>
-                            <div className="bg-white border border-gray-500 p-4">
-                                <img src={activeUser.image} className="w-full h-64 object-cover border-2 border-inset border-gray-300 mb-4" alt="" />
-                                <div className="space-y-2">
-                                     <div className="flex justify-between border-b border-gray-300 pb-1">
-                                        <span>Age:</span> <span className="font-bold">{activeUser.age}</span>
-                                     </div>
-                                     <div className="bg-[#FFFFE1] border border-gray-300 p-2 text-sm">{activeUser.bio}</div>
-                                </div>
-                            </div>
-                         </div>
-                         <div className="flex gap-4 mt-6">
-                             <button onClick={() => handleSwipe('left')} className="px-6 py-2 bg-[#ECE9D8] border-2 border-white border-r-black border-b-black active:border-t-black active:border-l-black text-black">Pass</button>
-                             <button onClick={() => handleSwipe('right')} className="px-6 py-2 bg-[#ECE9D8] border-2 border-white border-r-black border-b-black active:border-t-black active:border-l-black font-bold text-black">Like</button>
-                         </div>
-                    </div>
-                </div>
-            </XPWindow>
-        );
-    }
-
-    // Modern Home
     return (
-      <div className="h-full flex flex-col items-center justify-center p-4">
-          <div className="w-full max-w-md relative aspect-[3/4]">
-             <div className={`absolute inset-0 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl overflow-hidden transition-all duration-500 ease-out transform
-                 ${matchAnimation === 'left' ? '-translate-x-[150%] rotate-[-20deg] opacity-0' : ''}
-                 ${matchAnimation === 'right' ? 'translate-x-[150%] rotate-[20deg] opacity-0' : ''}
-                 ${matchAnimation === 'up' ? '-translate-y-[150%] opacity-0' : ''}
-             `}>
-                 <div className="absolute inset-0">
-                     <img src={activeUser.image} className="w-full h-full object-cover" alt="" />
-                     <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90" />
-                 </div>
-                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                     <div className="flex items-end gap-3 mb-2">
-                         <h2 className="text-3xl font-bold">{activeUser.name}</h2>
-                         <span className="text-xl opacity-80 mb-1">{activeUser.age}</span>
-                     </div>
-                     <p className="text-sm opacity-90 mb-4 line-clamp-2">{activeUser.bio}</p>
-                     <div className="flex flex-wrap gap-2 mb-4">
-                         {activeUser.games.map(g => (
-                             <span key={g.id} className="text-xs bg-white/20 backdrop-blur-md px-3 py-1 rounded-full">{g.name}</span>
-                         ))}
-                     </div>
-                 </div>
-             </div>
+      <div className="p-8 md:p-12 h-full overflow-y-auto animate-slide-in relative">
+        {previewThemeId && shopTab === 'themes' && (
+          <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-8 py-3 rounded-full font-black text-sm shadow-2xl z-[100] border-4 border-white flex items-center gap-3 animate-bounce">
+            <Eye size={18} />
+            {language === 'he' ? 'אתה במצב תצוגה מקדימה!' : 'Preview Mode Active!'}
+            <button onClick={() => setPreviewThemeId(null)} className="ml-4 bg-white/20 hover:bg-white/40 p-1 rounded-lg"><X size={14} /></button>
           </div>
-          <div className="flex items-center gap-6 mt-8">
-              <button onClick={() => handleSwipe('left')} className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-800 text-red-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><X size={28} /></button>
-              <button onClick={() => handleSwipe('up')} className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><Star size={24} /></button>
-              <button onClick={() => handleSwipe('right')} className="w-14 h-14 rounded-full bg-red-100 dark:bg-red-900/20 text-green-500 flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><Heart size={28} fill="currentColor" /></button>
+        )}
+
+        <div className="max-w-5xl mx-auto">
+          <header className="mb-12 text-center">
+            <div className="inline-flex items-center gap-3 bg-blue-100 dark:bg-blue-900/30 px-6 py-2 rounded-full mb-6 border border-blue-200 dark:border-blue-900/50 shadow-sm">
+              <Gem className="text-blue-600 dark:text-blue-400" />
+              <span className="text-xl font-black text-blue-700 dark:text-blue-300">{userCurrency}</span>
+            </div>
+            <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-4 tracking-tight uppercase">{t('shop_title')}</h1>
+            <p className="text-slate-500 dark:text-slate-400 font-medium max-w-lg mx-auto">{t('shop_subtitle')}</p>
+          </header>
+
+          <div className="flex justify-center mb-10">
+            <div className="bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl flex gap-1 shadow-inner border border-slate-200 dark:border-slate-700">
+              {[
+                { id: 'themes', l: t('tab_themes'), i: Palette },
+                { id: 'borders', l: t('tab_borders'), i: Layout },
+                { id: 'colors', l: t('tab_names'), i: Sparkles },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setShopTab(tab.id as any)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm transition-all
+                    ${shopTab === tab.id 
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-white shadow-md' 
+                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                >
+                  <tab.i size={18} />
+                  {tab.l}
+                </button>
+              ))}
+            </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 pb-12">
+            {shopTab === 'themes' && SHOP_THEMES.map(theme => {
+              const isUnlocked = unlockedThemeIds.includes(theme.id);
+              const isActive = activeThemeId === theme.id;
+              const isPreviewing = previewThemeId === theme.id;
+              return (
+                <div key={theme.id} className={`group relative rounded-[2.5rem] p-8 flex flex-col bg-white dark:bg-slate-800 border-4 transition-all overflow-hidden ${isActive ? 'border-blue-600 scale-[1.02]' : isPreviewing ? 'border-blue-400 scale-[1.02] shadow-2xl' : 'border-transparent shadow-xl'}`}>
+                  <div className={`h-32 w-full rounded-2xl mb-6 bg-gradient-to-br ${theme.gradient} flex items-center justify-center shadow-lg relative`}>
+                    <Palette className="text-white/40 group-hover:text-white/80 transition-colors" size={48} />
+                    {theme.cost === 0 && <span className="absolute top-2 left-2 bg-emerald-500 text-white text-[10px] font-black px-2 py-1 rounded-lg uppercase">FREE</span>}
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white mb-1 uppercase">{theme.name}</h3>
+                  <div className="mt-auto space-y-3">
+                    {!isActive && (
+                      <button onClick={() => setPreviewThemeId(isPreviewing ? null : theme.id)} className={`w-full py-3 rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all border-2 ${isPreviewing ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-500'}`}>
+                        {isPreviewing ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {isPreviewing ? (language === 'he' ? 'בטל תצוגה' : 'Stop Preview') : (language === 'he' ? 'תצוגה מקדימה' : 'Preview')}
+                      </button>
+                    )}
+                    {isActive ? (
+                      <div className="w-full py-4 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl font-black text-center flex items-center justify-center gap-2"><Check size={20} /> {t('active')}</div>
+                    ) : isUnlocked ? (
+                      <button onClick={() => { setActiveThemeId(theme.id); setPreviewThemeId(null); }} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all">{t('equip')}</button>
+                    ) : (
+                      <button onClick={() => handlePurchaseTheme(theme)} disabled={userCurrency < theme.cost} className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${userCurrency >= theme.cost ? 'bg-blue-600 text-white shadow-blue-500/30' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Gem size={18} /> {theme.cost}</button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {shopTab === 'borders' && borders.map(cosmetic => {
+              const isUnlocked = unlockedCosmeticIds.includes(cosmetic.id);
+              const isActive = myProfile.equippedBorderId === cosmetic.id;
+              return (
+                <div key={cosmetic.id} className={`bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-xl border-4 transition-all ${isActive ? 'border-blue-600' : 'border-transparent'}`}>
+                  <div className="flex justify-center mb-6">
+                    <div className={`w-32 h-32 rounded-full overflow-hidden ${cosmetic.style} transition-all duration-500`}>
+                      <img src={myProfile.image} className="w-full h-full object-cover" alt="" />
+                    </div>
+                  </div>
+                  <h3 className="text-center font-black mb-6 uppercase text-sm tracking-widest">{cosmetic.name}</h3>
+                  {isActive ? (
+                    <div className="w-full py-4 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl font-black text-center flex items-center justify-center gap-2"><Check size={20} /> {t('active')}</div>
+                  ) : isUnlocked ? (
+                    <button onClick={() => handleEquipCosmetic(cosmetic)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all">{t('equip')}</button>
+                  ) : (
+                    <button onClick={() => handlePurchaseCosmetic(cosmetic)} disabled={userCurrency < cosmetic.cost} className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${userCurrency >= cosmetic.cost ? 'bg-blue-600 text-white shadow-blue-500/30' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Gem size={18} /> {cosmetic.cost}</button>
+                  )}
+                </div>
+              );
+            })}
+
+            {shopTab === 'colors' && colors.map(cosmetic => {
+              const isUnlocked = unlockedCosmeticIds.includes(cosmetic.id);
+              const isActive = myProfile.equippedNameColorId === cosmetic.id;
+              return (
+                <div key={cosmetic.id} className={`bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-xl border-4 transition-all ${isActive ? 'border-blue-600' : 'border-transparent'}`}>
+                  <div className="text-center mb-8 h-12 flex items-center justify-center">
+                    <span className={`text-2xl font-black ${cosmetic.style}`}>{myProfile.name}</span>
+                  </div>
+                  <h3 className="text-center font-black mb-6 uppercase text-sm tracking-widest">{cosmetic.name}</h3>
+                  {isActive ? (
+                    <div className="w-full py-4 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-2xl font-black text-center flex items-center justify-center gap-2"><Check size={20} /> {t('active')}</div>
+                  ) : isUnlocked ? (
+                    <button onClick={() => handleEquipCosmetic(cosmetic)} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all">{t('equip')}</button>
+                  ) : (
+                    <button onClick={() => handlePurchaseCosmetic(cosmetic)} disabled={userCurrency < cosmetic.cost} className={`w-full py-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 ${userCurrency >= cosmetic.cost ? 'bg-blue-600 text-white shadow-blue-500/30' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}><Gem size={18} /> {cosmetic.cost}</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     );
   };
 
-  const renderProfile = () => {
-      if (appTheme === 'xp') {
-        return (
-          <XPWindow title="User Properties">
-             <div className="p-4 max-w-2xl mx-auto">
-                <div className="flex gap-1 border-b border-gray-400 mb-4 px-2">
-                    <div className="bg-white border-t border-l border-r border-gray-400 px-4 py-1 rounded-t relative top-[1px] z-10">General</div>
-                </div>
-                <div className="bg-white border border-gray-400 p-6 flex flex-col md:flex-row gap-6">
-                    <div className="flex flex-col items-center gap-2">
-                        <img src={myProfile.image} className="w-32 h-32 object-cover border-2 border-gray-300 p-1 bg-white shadow-sm" alt="" />
-                        <label className="px-3 py-1 bg-[#ECE9D8] border border-gray-500 text-xs cursor-pointer hover:bg-white">Browse...</label>
-                    </div>
-                    <div className="flex-1 space-y-4">
-                        <div className="grid grid-cols-[100px_1fr] items-center gap-2">
-                            <label className="text-right text-sm">Name:</label>
-                            <input type="text" value={myProfile.name} onChange={(e) => handleUpdateProfile('name', e.target.value)} className="border border-gray-400 p-1 text-sm outline-none" />
-                        </div>
-                        <div className="border border-gray-300 p-2 bg-white relative mt-4">
-                            <span className="absolute -top-2 right-2 bg-white px-1 text-xs text-[#0054E3]">Bio</span>
-                            <textarea value={myProfile.bio} onChange={(e) => handleUpdateProfile('bio', e.target.value)} className="w-full h-20 text-sm outline-none resize-none" />
-                        </div>
-                    </div>
-                </div>
-             </div>
-          </XPWindow>
-        );
-      }
-      
-      // Modern Profile
-      return (
-          <div className="max-w-2xl mx-auto p-4 md:p-8">
-              <h1 className="text-3xl font-bold mb-8 text-slate-900 dark:text-white">{t('edit_profile_title')}</h1>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden">
-                  <div className="h-32 bg-gradient-to-r from-blue-500 to-purple-600"></div>
-                  <div className="px-8 pb-8">
-                      <div className="relative -mt-16 mb-6">
-                          <img src={myProfile.image} className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 object-cover" alt="" />
-                          <button className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700">
-                              <Camera size={18} />
-                          </button>
+  const renderHome = () => (
+    <div className="h-full flex flex-col items-center p-4 pt-2 relative overflow-hidden">
+        {/* Filter Section */}
+        <div className="w-full max-w-4xl z-50 mb-6 mt-4 flex flex-col items-center gap-4">
+            <div className="flex items-center justify-center gap-4 px-2 relative" ref={dropdownRef}>
+                <button 
+                    onClick={() => setOnlyMutual(!onlyMutual)}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl border transition-all shadow-sm shrink-0
+                    ${onlyMutual 
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-blue-500/30' 
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400'}`}
+                >
+                    <Users size={18} />
+                    <span className="text-sm font-bold tracking-tight whitespace-nowrap">{t('find_mutual')}</span>
+                </button>
+                
+                <div className="relative">
+                  <button 
+                      onClick={() => setIsGameDropdownOpen(!isGameDropdownOpen)}
+                      className={`flex items-center gap-3 px-6 py-3 rounded-2xl border transition-all shadow-sm min-w-[160px] justify-between
+                      ${selectedGameId 
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-blue-500/30' 
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400'}`}
+                  >
+                      <div className="flex items-center gap-2">
+                          <Gamepad2 size={18} />
+                          <span className="text-sm font-bold tracking-tight whitespace-nowrap">
+                              {selectedGame ? `${selectedGame.icon} ${selectedGame.name}` : t('all_games')}
+                          </span>
                       </div>
-                      <div className="grid gap-6">
-                          <div>
-                              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{t('label_display_name')}</label>
-                              <input value={myProfile.name} onChange={(e) => handleUpdateProfile('name', e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" />
-                          </div>
-                          <div>
-                              <label className="block text-sm font-medium text-slate-500 dark:text-slate-400 mb-1">{t('label_bio')}</label>
-                              <textarea value={myProfile.bio} onChange={(e) => handleUpdateProfile('bio', e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none" />
-                          </div>
+                      <ChevronDown size={16} className={`transition-transform duration-300 ${isGameDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isGameDropdownOpen && (
+                    <div className="absolute top-full mt-2 left-0 right-0 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-[100] animate-slide-in max-h-[300px] overflow-y-auto">
+                        <button 
+                            onClick={() => { setSelectedGameId(null); setIsGameDropdownOpen(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left font-bold text-sm text-slate-600 dark:text-slate-300"
+                        >
+                            <FilterX size={16} />
+                            {t('all_games')}
+                        </button>
+                        {POPULAR_GAMES.map(game => (
+                            <button
+                                key={game.id}
+                                onClick={() => { setSelectedGameId(game.id); setIsGameDropdownOpen(false); }}
+                                className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-left font-bold text-sm
+                                ${selectedGameId === game.id ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300'}`}
+                            >
+                                <span className="text-xl">{game.icon}</span>
+                                {game.name}
+                                {selectedGameId === game.id && <Check size={14} className="ml-auto" />}
+                            </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {(onlyMutual || selectedGameId) && (
+                  <button 
+                    onClick={() => { setOnlyMutual(false); setSelectedGameId(null); }}
+                    className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 transition-colors"
+                  >
+                    <FilterX size={18} />
+                  </button>
+                )}
+            </div>
+        </div>
+
+        {/* Discovery Card */}
+        <div className="w-full max-w-md relative aspect-[3/4.5] sm:aspect-[3/4] mb-8">
+           {activeUser ? (
+              <div className={`absolute inset-0 bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-2xl overflow-hidden transition-all duration-500 ease-out transform
+                  ${matchAnimation === 'left' ? '-translate-x-[150%] rotate-[-20deg] opacity-0' : ''}
+                  ${matchAnimation === 'right' ? 'translate-x-[150%] rotate-[20deg] opacity-0' : ''}
+                  ${matchAnimation === 'up' ? '-translate-y-[150%] opacity-0' : ''}
+              `}>
+                  <div className="absolute inset-0">
+                      <img src={activeUser.image} className="w-full h-full object-cover" alt="" />
+                      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/80" />
+                  </div>
+                  <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
+                      <h2 className="text-4xl font-black mb-3">{activeUser.name}</h2>
+                      <div className="flex flex-wrap gap-2.5">
+                          {activeUser.games.map(g => (
+                              <span key={g.id} className="text-xs bg-white/10 backdrop-blur-xl border border-white/20 px-4 py-1.5 rounded-full font-bold">
+                                  {g.icon} {g.name}
+                              </span>
+                          ))}
                       </div>
                   </div>
               </div>
-          </div>
-      );
-  };
-
-  const renderMatches = () => {
-     if (appTheme === 'xp') {
-         return (
-            <XPWindow title={`My Matches (${MOCK_USERS.length})`}>
-                <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {MOCK_USERS.map(user => (
-                        <div key={user.id} className="flex flex-col items-center group cursor-pointer p-2 hover:bg-[#316AC5] hover:border-[#316AC5] border border-transparent rounded-sm hover:text-white">
-                            <img src={user.image} className="w-16 h-16 object-cover mb-1 border border-gray-300 bg-white p-0.5 shadow-sm" alt="" />
-                            <span className="text-xs text-center line-clamp-2">{user.name}</span>
-                        </div>
-                    ))}
-                </div>
-            </XPWindow>
-         );
-     }
-     
-     // Modern Matches
-     return (
-         <div className="p-4 md:p-8">
-             <h1 className="text-2xl font-bold mb-6 text-slate-900 dark:text-white">{t('matches_title')}</h1>
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                 {MOCK_USERS.map((user) => (
-                     <div key={user.id} className="group relative aspect-[3/4] rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all">
-                         <img src={user.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="" />
-                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3">
-                             <span className="text-white font-bold">{user.name}</span>
-                             <span className="text-white/80 text-xs">{user.age}</span>
-                         </div>
-                     </div>
-                 ))}
-             </div>
-         </div>
-     );
-  };
-
-  const renderChatList = () => {
-    if (appTheme === 'xp') {
-        return (
-            <XPWindow title="MSN Messenger - Chat">
-                <div className="flex h-full">
-                    <div className="w-64 bg-[#F0F2F5] border-r border-gray-300 p-2 hidden md:flex flex-col gap-2">
-                        <div className="bg-gradient-to-r from-[#D7E4F2] to-[#A3C3E5] p-2 flex items-center gap-2 border border-[#8DA9D4] rounded-t">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Windows_Live_Messenger_logo.svg/1024px-Windows_Live_Messenger_logo.svg.png" className="w-6 h-6" alt="MSN" />
-                            <span className="font-bold text-[#1F3B5F] text-sm">Contacts</span>
-                        </div>
-                        <div className="flex-1 bg-white border border-[#8DA9D4] overflow-y-auto p-1">
-                            {chats.map(chat => (
-                                <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setView(ViewState.CHAT_ROOM); }} className="flex items-center gap-2 p-1 hover:bg-[#CEE5F2] cursor-pointer">
-                                    <img src={chat.user.image} className="w-8 h-8 border border-gray-300" alt="" />
-                                    <div className="text-xs font-bold text-[#1F3B5F] truncate">{chat.user.name}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex-1 bg-white flex flex-col items-center justify-center p-8">
-                         <span className="text-[#1F3B5F] font-bold">Select a contact to start chatting</span>
-                    </div>
-                </div>
-            </XPWindow>
-        );
-    }
-    
-    // Modern Chat List
-    return (
-        <div className="max-w-3xl mx-auto p-4 h-full flex flex-col">
-            <h1 className="text-2xl font-bold mb-4 text-slate-900 dark:text-white">{t('messages_title')}</h1>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg flex-1 overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-700">
-                {chats.map((chat) => (
-                    <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setView(ViewState.CHAT_ROOM); }} className="p-4 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors">
-                        <div className="relative">
-                            <img src={chat.user.image} className="w-12 h-12 rounded-full object-cover" alt="" />
-                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-slate-800"></span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-baseline mb-1">
-                                <h3 className="font-bold text-slate-900 dark:text-white truncate">{chat.user.name}</h3>
-                                <span className="text-xs text-slate-500">{chat.timestamp}</span>
-                            </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 truncate">{chat.lastMessage}</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
+           ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-slate-100 dark:bg-slate-900/50 rounded-[2.5rem]">
+                  <Search className="text-slate-400 mb-4" size={32} />
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">{t('players_found')} (0)</h3>
+                  <button 
+                    onClick={() => { setOnlyMutual(false); setSelectedGameId(null); }}
+                    className="mt-4 text-blue-600 font-bold"
+                  >
+                    איפוס מסננים
+                  </button>
+              </div>
+           )}
         </div>
-    );
-  };
+        
+        {activeUser && (
+            <div className="flex items-center gap-8 mb-6">
+                <button onClick={() => handleSwipe('left')} className="w-16 h-16 rounded-full bg-white dark:bg-slate-800 text-red-500 flex items-center justify-center shadow-xl border border-slate-100 dark:border-slate-700">
+                    <X size={32} strokeWidth={3} />
+                </button>
+                <button onClick={() => handleSwipe('up')} className="w-14 h-14 rounded-full bg-white dark:bg-slate-800 text-blue-500 flex items-center justify-center shadow-xl border border-slate-100 dark:border-slate-700 relative">
+                    <Star size={28} fill="currentColor" />
+                    {superLikesCount > 0 && <span className="absolute -top-1 -right-1 w-6 h-6 bg-blue-600 text-white text-[10px] font-black rounded-full flex items-center justify-center">{superLikesCount}</span>}
+                </button>
+                <button onClick={() => handleSwipe('right')} className="w-16 h-16 rounded-full bg-white dark:bg-slate-800 text-emerald-500 flex items-center justify-center shadow-xl border border-slate-100 dark:border-slate-700">
+                    <Heart size={32} fill="currentColor" />
+                </button>
+            </div>
+        )}
+    </div>
+  );
+
+  const renderProfile = () => (
+      <div className="max-w-2xl mx-auto p-4 md:p-8 h-full overflow-y-auto animate-slide-in">
+          <h1 className="text-3xl font-black mb-8">{t('edit_profile_title')}</h1>
+          <div className="mb-8 grid grid-cols-2 gap-4">
+              <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl flex flex-col items-center">
+                  <Gem size={24} className="text-blue-500 mb-3" />
+                  <div className="text-2xl font-black">{userCurrency}</div>
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('currency')}</div>
+              </div>
+              <div onClick={() => handleSetView(ViewState.SHOP)} className="bg-white dark:bg-slate-800 rounded-3xl p-6 shadow-xl flex flex-col items-center cursor-pointer border-2 border-transparent hover:border-blue-600 transition-colors group">
+                  <ShoppingBag size={24} className="text-blue-500 mb-3 group-hover:scale-110 transition-transform" />
+                  <div className="text-lg font-black uppercase">{t('he' === language ? 'חנות' : 'Shop')}</div>
+              </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-xl overflow-hidden">
+              <div className="h-40 bg-gradient-to-r from-blue-600 to-indigo-700"></div>
+              <div className="px-10 pb-10">
+                  <div className="relative -mt-20 mb-8 flex flex-col items-center">
+                      <div className={`relative w-40 h-40 rounded-full ${equippedBorder?.style} overflow-hidden border-[6px] border-white dark:border-slate-800 shadow-2xl transition-all duration-500`}>
+                          <img src={myProfile.image} className="w-full h-full object-cover" alt="" />
+                      </div>
+                      <button className="absolute bottom-2 right-1/2 translate-x-[60px] bg-blue-600 text-white p-3 rounded-2xl shadow-lg"><Camera size={22} /></button>
+                      <h2 className={`mt-6 text-3xl font-black tracking-tight ${equippedNameColor?.style}`}>{myProfile.name}</h2>
+                  </div>
+                  <div className="grid gap-8">
+                      <div className="space-y-2">
+                          <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{t('label_display_name')}</label>
+                          <input value={myProfile.name} onChange={(e) => handleUpdateProfile('name', e.target.value)} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none focus:border-blue-500 transition-all" />
+                      </div>
+                      <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-500/20">{t('save_changes')}</button>
+                  </div>
+              </div>
+          </div>
+      </div>
+  );
+
+  const renderMatches = () => (
+      <div className="p-4 md:p-10 h-full overflow-y-auto animate-slide-in">
+          <h1 className="text-3xl font-black mb-8">{t('matches_title')}</h1>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+              {MOCK_USERS.map((user) => (
+                  <div key={user.id} className="group relative aspect-[3/4] rounded-[2rem] overflow-hidden cursor-pointer shadow-lg">
+                      <img src={user.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-all flex flex-col justify-end p-6">
+                          <span className="text-white font-black text-xl mb-1">{user.name}</span>
+                          <span className="text-white/80 text-sm font-bold uppercase">{user.age} • {user.distance}</span>
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+  );
+
+  const renderChatList = () => (
+      <div className="max-w-3xl mx-auto p-4 md:p-8 h-full flex flex-col animate-slide-in">
+          <h1 className="text-3xl font-black mb-6">{t('messages_title')}</h1>
+          <div className="bg-white dark:bg-slate-800 rounded-[2.5rem] shadow-xl flex-1 overflow-hidden flex flex-col divide-y divide-slate-100 dark:divide-slate-700 border border-slate-100 dark:border-slate-700">
+              {chats.map((chat) => (
+                  <div key={chat.id} onClick={() => { setActiveChatId(chat.id); handleSetView(ViewState.CHAT_ROOM); }} className="p-6 flex items-center gap-5 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-all group">
+                      <img src={chat.user.image} className="w-16 h-16 rounded-[1.25rem] object-cover" alt="" />
+                      <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-baseline mb-1">
+                              <h3 className="font-black text-lg truncate">{chat.user.name}</h3>
+                              <span className="text-xs font-bold text-slate-400 uppercase">{chat.timestamp}</span>
+                          </div>
+                          <p className="text-sm font-medium text-slate-500 truncate">{chat.lastMessage}</p>
+                      </div>
+                      <ChevronRight className="text-slate-300 group-hover:translate-x-1 transition-transform" size={20} />
+                  </div>
+              ))}
+          </div>
+      </div>
+  );
 
   const renderChatRoom = () => {
       const activeChat = chats.find(c => c.id === activeChatId);
       if (!activeChat) return null;
-
-      if (appTheme === 'xp') {
-        return (
-            <XPWindow title={`Conversation with ${activeChat.user.name}`} noPadding>
-                <div className="flex flex-col h-full bg-[#F6F9FC]">
-                    <div className="bg-gradient-to-r from-[#EBF3FA] to-[#CEDEF2] p-2 border-b border-[#96B5D7] flex items-center gap-2">
-                        <button onClick={() => setView(ViewState.CHAT_LIST)} className="md:hidden text-xs border p-1">Back</button>
-                        <img src={activeChat.user.image} className="w-10 h-10 border border-white shadow-sm" alt="" />
-                        <div className="text-[#1F3B5F] font-bold text-sm">{activeChat.user.name}</div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4 bg-white border border-[#96B5D7] m-2">
-                        {activeChat.messages.map(msg => (
-                            <div key={msg.id} className="mb-2 text-sm">
-                                <span className={`font-bold ${msg.isMe ? 'text-[#0000FF]' : 'text-[#FF0000]'}`}>{msg.isMe ? 'You' : activeChat.user.name} says:</span>
-                                <span className="text-black ml-1 font-tahoma">{msg.text}</span>
-                            </div>
-                        ))}
-                    </div>
-                    <form className="h-24 m-2 mt-0 border border-[#96B5D7] bg-white flex flex-col" onSubmit={(e) => { e.preventDefault(); handleSendMessage((e.target as any).msg.value); (e.target as any).msg.value=''; }}>
-                        <input name="msg" className="flex-1 p-2 outline-none font-tahoma text-sm" placeholder="Type a message..." />
-                        <button type="submit" className="bg-gray-100 border-t p-1 text-xs">Send</button>
-                    </form>
-                </div>
-            </XPWindow>
-        );
-      }
-
-      // Modern Chat Room
       return (
-        <div className="h-full flex flex-col bg-white dark:bg-slate-900">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
-                 <button onClick={() => setView(ViewState.CHAT_LIST)} className="md:hidden p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"><ChevronRight className="rotate-180" /></button>
-                 <img src={activeChat.user.image} className="w-10 h-10 rounded-full" alt="" />
-                 <span className="font-bold text-slate-900 dark:text-white">{activeChat.user.name}</span>
+        <div className="h-full flex flex-col bg-white dark:bg-slate-900 animate-slide-in">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center gap-4">
+                 <button onClick={() => handleSetView(ViewState.CHAT_LIST)} className="md:hidden p-2 -ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><ChevronLeft /></button>
+                 <img src={activeChat.user.image} className="w-12 h-12 rounded-[1rem] shadow-md" alt="" />
+                 <div>
+                    <h2 className="font-black text-xl tracking-tight">{activeChat.user.name}</h2>
+                    <span className="text-xs font-bold text-emerald-500 uppercase">{t('online_now')}</span>
+                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 dark:bg-slate-900/50">
                 {activeChat.messages.map(msg => (
                     <div key={msg.id} className={`flex ${msg.isMe ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[75%] px-4 py-2 rounded-2xl ${msg.isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-tl-none'}`}>
+                        <div className={`max-w-[80%] px-5 py-3 rounded-2xl shadow-sm font-medium text-sm ${msg.isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 rounded-tl-none border border-slate-100 dark:border-slate-700'}`}>
                             {msg.text}
                         </div>
                     </div>
                 ))}
             </div>
-            <form className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" onSubmit={(e) => { e.preventDefault(); handleSendMessage((e.target as any).msg.value); (e.target as any).msg.value=''; }}>
-                <div className="flex gap-2">
-                    <input name="msg" className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full px-4 py-2 outline-none text-slate-900 dark:text-white" placeholder={t('type_message')} />
-                    <button type="submit" className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white"><Send size={18} /></button>
+            <form className="p-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800" onSubmit={(e) => { e.preventDefault(); handleSendMessage((e.target as any).msg.value); (e.target as any).msg.value=''; }}>
+                <div className="flex gap-4">
+                    <input name="msg" className="flex-1 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-[1.5rem] px-6 py-3.5 outline-none font-bold focus:border-blue-500 transition-all" placeholder={t('type_message')} />
+                    <button type="submit" className="w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-[1.25rem] flex items-center justify-center text-white shadow-xl shadow-blue-500/20 active:scale-90 transition-all shrink-0">
+                        <Send size={24} />
+                    </button>
                 </div>
             </form>
         </div>
       );
   };
 
-  const renderSettings = () => {
-      // 1. XP SETTINGS (Control Panel)
-      if (appTheme === 'xp') {
-        return (
-            <XPWindow title="Control Panel">
-                 <div className="flex h-full">
-                    <div className="w-48 bg-gradient-to-b from-[#7A96DF] to-[#98B4E2] p-4 text-white hidden md:block">
-                        <div className="font-bold mb-2">Control Panel</div>
-                        <div className="text-xs mb-4">Switch to Classic View</div>
-                        <div className="border-t border-[#98B4E2] my-2"></div>
-                    </div>
-                    <div className="flex-1 bg-white p-6 overflow-y-auto">
-                        <h2 className="text-xl font-bold mb-6 text-black">Pick a category</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                            <div className="flex gap-3 items-start cursor-pointer group">
-                                <img src="https://w7.pngwing.com/pngs/382/204/png-transparent-globe-world-computer-icons-globe-miscellaneous-blue-globe.png" className="w-12 h-12" alt="" />
-                                <div>
-                                    <h3 className="font-bold text-[#1F3B5F] group-hover:underline group-hover:text-[#E68B2C]">Appearance and Themes</h3>
-                                    <p className="text-xs text-gray-500">Change the computer's theme.</p>
-                                    <div className="mt-2 flex flex-col gap-2">
-                                        <button onClick={() => setAppTheme('modern')} className="text-xs text-left px-2 py-1 border bg-gray-100 hover:bg-[#316AC5] hover:text-white">
-                                            Switch to Modern View
-                                        </button>
-                                        <div className="flex gap-1">
-                                            <button onClick={() => setLanguage('he')} className={`text-xs px-2 border ${language === 'he' ? 'bg-[#316AC5] text-white' : 'bg-gray-100'}`}>Heb</button>
-                                            <button onClick={() => setLanguage('en')} className={`text-xs px-2 border ${language === 'en' ? 'bg-[#316AC5] text-white' : 'bg-gray-100'}`}>Eng</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                 </div>
-            </XPWindow>
-        );
-      }
-
-      // 2. MODERN SETTINGS (Discord Style)
-      return (
-        <div className="flex h-full bg-[#313338] text-gray-200 font-sans">
-             <div className="w-60 bg-[#2B2D31] flex flex-col text-xs font-medium">
-                <div className="p-4 pt-8">
-                     <div className="text-gray-400 font-bold mb-2 px-2 text-[11px] uppercase">{t('user_settings')}</div>
-                     {[
-                        { id: 'account', l: t('set_account') },
-                        { id: 'profile', l: t('set_profile') },
-                        { id: 'privacy', l: t('set_privacy') },
-                        { id: 'subs', l: t('set_subs') }
-                     ].map(item => (
-                         <div 
-                             key={item.id} 
-                             onClick={() => setSettingsTab(item.id)}
-                             className={`px-2 py-1.5 mb-0.5 rounded cursor-pointer ${settingsTab === item.id ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
-                         >
-                             {item.l}
-                         </div>
-                     ))}
-                     <div className="border-b border-[#3F4147] my-2 mx-2"></div>
-                     <div className="text-gray-400 font-bold mb-2 px-2 text-[11px] uppercase">{t('app_settings')}</div>
-                     {[
-                        { id: 'appearance', l: t('set_appearance') },
-                        { id: 'language', l: t('set_language') },
-                     ].map(item => (
-                         <div 
-                             key={item.id} 
-                             onClick={() => setSettingsTab(item.id)}
-                             className={`px-2 py-1.5 mb-0.5 rounded cursor-pointer ${settingsTab === item.id ? 'bg-[#3F4147] text-white' : 'text-gray-400 hover:bg-[#35373C] hover:text-gray-200'}`}
-                         >
-                             {item.l}
-                         </div>
-                     ))}
-                </div>
-             </div>
-             <div className="flex-1 bg-[#313338] p-10 overflow-y-auto">
-                 {settingsTab === 'appearance' && (
-                     <div className="max-w-2xl">
-                         <h2 className="text-xl font-bold text-white mb-6">{t('set_appearance')}</h2>
-                         <div className="mb-8">
-                             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">{t('theme')}</h3>
-                             <div className="flex gap-4">
-                                 <div 
-                                    onClick={() => setDarkMode(false)} 
-                                    className={`flex-1 p-4 bg-white rounded-lg cursor-pointer border-2 ${!darkMode ? 'border-green-500' : 'border-transparent'}`}
-                                 >
-                                     <div className="w-full h-24 bg-gray-100 rounded mb-2 border border-gray-300"></div>
-                                     <div className="text-center text-black font-bold">{t('theme_light')}</div>
-                                 </div>
-                                 <div 
-                                    onClick={() => setDarkMode(true)} 
-                                    className={`flex-1 p-4 bg-[#2B2D31] rounded-lg cursor-pointer border-2 ${darkMode ? 'border-green-500' : 'border-transparent'}`}
-                                 >
-                                     <div className="w-full h-24 bg-[#313338] rounded mb-2"></div>
-                                     <div className="text-center text-white font-bold">{t('theme_dark')}</div>
-                                 </div>
-                             </div>
-                         </div>
-                         <div className="mb-8">
-                             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">Retro Mode</h3>
-                             <div className="flex items-center justify-between p-4 bg-[#2B2D31] rounded-lg border border-[#1F2023]">
-                                 <div className="flex items-center gap-3">
-                                     <Monitor className="text-blue-400" />
-                                     <div>
-                                         <div className="text-white font-medium">Windows XP Theme</div>
-                                         <div className="text-xs text-gray-400">Experience the nostalgia of 2001</div>
-                                     </div>
-                                 </div>
-                                 <button 
-                                     onClick={() => setAppTheme('xp')}
-                                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
-                                 >
-                                     Switch to XP
-                                 </button>
-                             </div>
-                         </div>
-                     </div>
-                 )}
-                 {settingsTab === 'language' && (
-                     <div className="max-w-2xl">
-                         <h2 className="text-xl font-bold text-white mb-6">{t('set_language')}</h2>
-                         <div className="space-y-2">
-                             {[
-                                 { code: 'he', label: 'עברית', native: 'Hebrew' },
-                                 { code: 'en', label: 'English', native: 'US' }
-                             ].map((lang) => (
-                                 <div 
-                                    key={lang.code}
-                                    onClick={() => setLanguage(lang.code as any)}
-                                    className={`flex items-center justify-between p-4 rounded bg-[#2B2D31] cursor-pointer border ${language === lang.code ? 'border-green-500' : 'border-transparent hover:bg-[#35373C]'}`}
-                                 >
-                                     <span className="text-white">{lang.label}</span>
-                                     {language === lang.code && <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-[#2B2D31]"></div>}
-                                 </div>
-                             ))}
-                         </div>
-                     </div>
-                 )}
-             </div>
-        </div>
-      );
-  };
-
-  const renderSubscription = () => {
-    // Shared Logic/Data, different render
-    if (appTheme === 'xp') {
-        return (
-            <XPWindow title="GameOn Gold">
-                <div className="p-8 bg-white h-full overflow-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {PLANS.map(plan => (
-                            <div key={plan.id} className="bg-[#ECE9D8] border-2 border-white border-r-gray-500 border-b-gray-500 p-1">
-                                <div className="border border-gray-400 p-4 h-full text-center">
-                                    <h3 className="font-bold">{plan.name}</h3>
-                                    <div className="text-xl text-[#0054E3] font-bold">${plan.price}</div>
-                                </div>
-                            </div>
+  const renderSubscription = () => (
+    <div className="p-8 md:p-12 h-full overflow-y-auto animate-slide-in">
+        <h1 className="text-4xl font-black text-center mb-4 tracking-tight uppercase">{t('gold_title')}</h1>
+        <p className="text-center text-slate-500 mb-12 max-w-xl mx-auto font-medium">{t('gold_subtitle')}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {PLANS.map((plan) => (
+                <div key={plan.id} className={`relative rounded-[3rem] p-10 flex flex-col bg-white dark:bg-slate-800 border-4 ${plan.isPopular ? 'border-blue-600 scale-105 shadow-2xl z-10 shadow-blue-500/20' : 'border-transparent shadow-xl shadow-slate-200/50 dark:shadow-black/20'}`}>
+                    {plan.isPopular && <div className="absolute -top-5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-black px-6 py-2 rounded-full shadow-lg uppercase tracking-widest">{t('most_popular')}</div>}
+                    <h3 className={`text-2xl font-black mb-2 bg-gradient-to-r ${plan.color} bg-clip-text text-transparent uppercase tracking-tight`}>{plan.name}</h3>
+                    <div className="text-5xl font-black mb-8 tracking-tighter">${plan.price}<span className="text-lg font-bold text-slate-400 lowercase tracking-normal"> {t('plan_per_month')}</span></div>
+                    <ul className="space-y-5 mb-10 flex-1">
+                        {plan.features.map((feature, i) => (
+                            <li key={i} className="flex items-center gap-4 text-sm font-bold text-slate-600 dark:text-slate-300">
+                                <Shield size={16} className="text-blue-600" />
+                                {feature}
+                            </li>
                         ))}
-                    </div>
+                    </ul>
+                    <button className={`w-full py-5 rounded-[1.5rem] font-black text-xl text-white shadow-xl transition-all hover:scale-[1.02] active:scale-95 bg-gradient-to-r ${plan.color}`}>{t('select_plan')}</button>
                 </div>
-            </XPWindow>
-        );
-    }
-    return (
-        <div className="p-8 h-full overflow-y-auto">
-            <h1 className="text-3xl font-bold text-center mb-10 text-slate-900 dark:text-white">{t('gold_title')}</h1>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {PLANS.map((plan) => (
-                    <div key={plan.id} className={`relative rounded-2xl p-6 flex flex-col bg-white dark:bg-slate-800 border-2 ${plan.isPopular ? 'border-yellow-500 scale-105 shadow-xl z-10' : 'border-transparent shadow-lg'}`}>
-                        {plan.isPopular && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white text-xs font-bold px-4 py-1 rounded-full shadow-lg">{t('most_popular')}</div>}
-                        <h3 className={`text-xl font-bold mb-2 bg-gradient-to-r ${plan.color} bg-clip-text text-transparent`}>{plan.name}</h3>
-                        <div className="text-3xl font-bold text-slate-900 dark:text-white mb-6">${plan.price}<span className="text-sm font-normal text-slate-500"> {t('plan_per_month')}</span></div>
-                        <ul className="space-y-4 mb-8 flex-1">
-                            {plan.features.map((feature, i) => (
-                                <li key={i} className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                                    <div className={`w-5 h-5 rounded-full bg-gradient-to-r ${plan.color} flex items-center justify-center shrink-0`}>
-                                        <Shield size={10} className="text-white" />
-                                    </div>
-                                    {feature}
-                                </li>
-                            ))}
-                        </ul>
-                        <button className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition-transform hover:scale-105 bg-gradient-to-r ${plan.color}`}>{t('select_plan')}</button>
-                    </div>
-                ))}
-            </div>
+            ))}
         </div>
-    );
-  };
+    </div>
+  );
+
+  const renderSettings = () => (
+    <div className="flex h-full animate-slide-in">
+         <div className="w-20 lg:w-64 bg-slate-50 dark:bg-slate-800/50 flex flex-col border-r border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="p-6">
+                 <div className="text-slate-400 font-black mb-4 px-2 text-[10px] uppercase tracking-widest">{t('user_settings')}</div>
+                 {[
+                    { id: 'appearance', l: t('set_appearance'), i: Monitor },
+                    { id: 'language', l: t('set_language'), i: Globe },
+                 ].map(item => (
+                     <div key={item.id} onClick={() => setSettingsTab(item.id)} className={`px-3 py-3 mb-1 rounded-2xl cursor-pointer transition-all flex items-center gap-3 ${settingsTab === item.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800'}`}>
+                         <item.i size={18} />
+                         <span className="hidden lg:block font-bold">{item.l}</span>
+                     </div>
+                 ))}
+            </div>
+         </div>
+         <div className="flex-1 p-10 overflow-y-auto">
+             {settingsTab === 'appearance' && (
+                 <div className="max-w-2xl">
+                     <h2 className="text-3xl font-black mb-8">{t('set_appearance')}</h2>
+                     <div className="flex gap-6">
+                         <div onClick={() => { setDarkMode(false); setActiveThemeId('light'); }} className={`flex-1 p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl cursor-pointer border-4 transition-all ${!darkMode ? 'border-blue-600 ring-8 ring-blue-500/10' : 'border-transparent'}`}>
+                             <Sun className="text-yellow-500 w-12 h-12 mb-4 mx-auto" />
+                             <div className="text-center font-black">{t('theme_light')}</div>
+                         </div>
+                         <div onClick={() => { setDarkMode(true); setActiveThemeId('dark'); }} className={`flex-1 p-6 bg-slate-50 dark:bg-slate-800 rounded-3xl cursor-pointer border-4 transition-all ${darkMode ? 'border-blue-600 ring-8 ring-blue-500/10' : 'border-transparent'}`}>
+                             <Moon className="text-blue-400 w-12 h-12 mb-4 mx-auto" />
+                             <div className="text-center font-black">{t('theme_dark')}</div>
+                         </div>
+                     </div>
+                 </div>
+             )}
+             {settingsTab === 'language' && (
+                 <div className="max-w-2xl">
+                     <h2 className="text-3xl font-black mb-8">{t('set_language')}</h2>
+                     {['he', 'en'].map((lang) => (
+                         <div key={lang} onClick={() => setLanguage(lang as any)} className={`flex items-center justify-between p-6 mb-3 rounded-2xl cursor-pointer border-2 transition-all ${language === lang ? 'border-blue-600 bg-blue-600/5' : 'border-slate-100 dark:border-slate-800'}`}>
+                             <span className="font-black text-lg">{lang === 'he' ? 'עברית' : 'English'}</span>
+                             {language === lang && <div className="w-5 h-5 bg-blue-600 rounded-full border-4 border-white dark:border-slate-900"></div>}
+                         </div>
+                     ))}
+                 </div>
+             )}
+         </div>
+    </div>
+  );
 
   return (
-    <div className={`flex flex-col h-screen w-full font-sans overflow-hidden ${appTheme === 'modern' ? (darkMode ? 'dark bg-slate-900' : 'bg-slate-100') : ''}`}>
+    <div className={`flex flex-col h-screen w-full font-sans overflow-hidden transition-colors duration-300 ${darkMode ? 'dark' : ''}`}>
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
       
-      {/* Container */}
-      <div className="flex-1 flex overflow-hidden">
-          
-          {/* Sidebars */}
-          <aside className="hidden md:block shrink-0 h-full relative z-10">
-              {appTheme === 'xp' ? <XPSidebar /> : <ModernSidebar />}
-          </aside>
+      {showRewardModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-[3rem] p-10 max-sm w-full shadow-2xl text-center border-4 border-emerald-500/30">
+            <div className="w-24 h-24 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 mx-auto mb-6"><Gem size={48} /></div>
+            <h2 className="text-3xl font-black mb-2">{t('daily_reward')}</h2>
+            <p className="text-slate-500 mb-8 font-medium">
+                {loginStreak === 7 
+                  ? t('daily_reward_streak') 
+                  : t('daily_reward_desc').replace('{days}', (7 - loginStreak).toString())}
+            </p>
+            <button onClick={() => setShowRewardModal(false)} className="w-full py-5 bg-blue-600 text-white rounded-3xl font-black text-xl shadow-xl shadow-blue-500/20">{t('he' === language ? 'מעולה!' : 'Awesome!')}</button>
+          </div>
+        </div>
+      )}
 
-          {/* Main Area */}
-          <main className={`flex-1 overflow-hidden relative ${appTheme === 'xp' ? 'p-2 md:p-8 pb-12' : 'pb-16 md:pb-0'}`}>
+      <div className="flex-1 flex overflow-hidden">
+          <aside className="hidden md:block shrink-0 h-full relative z-10">
+              <ModernSidebar />
+          </aside>
+          <main className="flex-1 overflow-hidden relative pb-16 md:pb-0">
               {view === ViewState.HOME && renderHome()}
               {view === ViewState.PROFILE && renderProfile()}
               {view === ViewState.MATCHES && renderMatches()}
@@ -757,30 +772,10 @@ const App = () => {
               {view === ViewState.CHAT_ROOM && renderChatRoom()}
               {view === ViewState.SUBSCRIPTION && renderSubscription()}
               {view === ViewState.SETTINGS && renderSettings()}
+              {view === ViewState.SHOP && renderShop()}
           </main>
       </div>
-
-      {/* Navigations */}
-      {appTheme === 'xp' ? <XPTaskbar /> : <div className="md:hidden"><ModernBottomNav /></div>}
-      
-      {/* Mobile Drawer (XP Only) */}
-      {isMobileMenuOpen && appTheme === 'xp' && (
-        <div className="fixed bottom-10 left-0 bg-white border-2 border-[#0054E3] rounded-t-lg shadow-2xl z-50 w-64">
-             <div className="bg-[#245DDA] p-2 flex items-center gap-2 rounded-t text-white font-bold border-b-2 border-[#E68B2C]">
-                 <img src={myProfile.image} className="w-10 h-10 rounded border-2 border-white" alt="" />
-                 <span>{myProfile.name}</span>
-             </div>
-             <div className="flex">
-                 <div className="w-1/2 bg-white p-2 text-sm text-black space-y-2 border-r border-gray-200">
-                     <div onClick={() => { setView(ViewState.HOME); setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer font-bold">Internet</div>
-                     <div onClick={() => { setView(ViewState.SETTINGS); setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer">Settings</div>
-                 </div>
-                 <div className="w-1/2 bg-[#D3E5FA] p-2 text-sm text-[#1E3C7B] space-y-2">
-                     <div onClick={() => { setIsMobileMenuOpen(false); }} className="hover:bg-[#316AC5] hover:text-white p-1 cursor-pointer">Log Off</div>
-                 </div>
-             </div>
-        </div>
-      )}
+      <div className="md:hidden"><ModernBottomNav /></div>
     </div>
   );
 };

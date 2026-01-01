@@ -5,10 +5,9 @@ export enum ViewState {
   CHAT_LIST = 'CHAT_LIST',
   CHAT_ROOM = 'CHAT_ROOM',
   SUBSCRIPTION = 'SUBSCRIPTION',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  SHOP = 'SHOP'
 }
-
-export type AppTheme = 'xp' | 'modern';
 
 export enum Platform {
   PC = 'PC',
@@ -20,7 +19,7 @@ export enum Platform {
 export interface GameInfo {
   id: string;
   name: string;
-  icon: string; // Emoji or simple representation
+  icon: string;
   rank?: string;
   role?: string;
   description?: string;
@@ -36,6 +35,16 @@ export interface UserProfile {
   games: GameInfo[];
   distance?: string;
   isMatch?: boolean;
+  equippedBorderId?: string;
+  equippedNameColorId?: string;
+}
+
+export interface Cosmetic {
+  id: string;
+  name: string;
+  cost: number;
+  type: 'BORDER' | 'NAME_COLOR';
+  style: string; // CSS class or hex color
 }
 
 export interface ChatMessage {
@@ -62,4 +71,13 @@ export interface SubscriptionPlan {
   features: string[];
   isPopular?: boolean;
   color: string;
+}
+
+export interface Theme {
+  id: string;
+  name: string;
+  cost: number;
+  gradient: string;
+  previewColor: string;
+  accentClass: string;
 }

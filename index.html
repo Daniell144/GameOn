@@ -12,83 +12,164 @@
           extend: {
             fontFamily: {
               sans: ['Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
-              tahoma: ['Tahoma', 'Verdana', 'sans-serif'],
             },
             colors: {
-              xp: {
-                blue: '#245DDA',
-                blueLight: '#3A93FF',
-                beige: '#ECE9D8',
-                green: '#3C9E36',
-                orange: '#E68B2C',
-                red: '#E53E30'
-              },
               discord: {
                 dark: '#313338',
                 sidebar: '#2B2D31',
                 active: '#3F4147',
                 hover: '#35373C'
               }
-            },
-            boxShadow: {
-              'xp': '2px 2px 0px 0px rgba(0,0,0,0.3)',
-              'xp-inset': 'inset 2px 2px 0px 0px rgba(0,0,0,0.1)',
             }
           }
         }
       }
     </script>
     <style>
-      /* Base transitions */
+      :root {
+        --primary-brand: #2563eb;
+        --primary-brand-hover: #1d4ed8;
+        --bg-main: #f8fafc;
+        --bg-sidebar: #ffffff;
+        --bg-card: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: rgba(0, 0, 0, 0.05);
+      }
+
+      .dark {
+        --bg-main: #0f172a;
+        --bg-sidebar: #0f172a;
+        --bg-card: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+        --border-color: rgba(255, 255, 255, 0.05);
+      }
+
+      /* Explicit Theme Variable Overrides */
+      .theme-light {
+        --bg-main: #f8fafc;
+        --bg-sidebar: #ffffff;
+        --bg-card: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+      }
+      .theme-dark {
+        --bg-main: #0f172a;
+        --bg-sidebar: #0f172a;
+        --bg-card: #1e293b;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+      }
+      .theme-cyberpunk {
+        --primary-brand: #db2777;
+        --primary-brand-hover: #be185d;
+        --bg-main: #1a0b2e;
+        --bg-sidebar: #0f051a;
+        --bg-card: #2d0a31;
+        --text-main: #ff00ff;
+        --text-muted: #bd93f9;
+        --border-color: rgba(219, 39, 119, 0.2);
+      }
+      .theme-forest {
+        --primary-brand: #059669;
+        --primary-brand-hover: #047857;
+        --bg-main: #06201b;
+        --bg-sidebar: #041411;
+        --bg-card: #0a2d27;
+        --text-main: #a7f3d0;
+        --text-muted: #34d399;
+        --border-color: rgba(5, 150, 105, 0.2);
+      }
+      .theme-sunset {
+        --primary-brand: #f97316;
+        --primary-brand-hover: #ea580c;
+        --bg-main: #2a0e0e;
+        --bg-sidebar: #1a0808;
+        --bg-card: #3a1515;
+        --text-main: #fed7aa;
+        --text-muted: #fb923c;
+        --border-color: rgba(249, 115, 22, 0.2);
+      }
+      .theme-luxury {
+        --primary-brand: #ca8a04;
+        --primary-brand-hover: #a16207;
+        --bg-main: #0a0a0a;
+        --bg-sidebar: #050505;
+        --bg-card: #111111;
+        --text-main: #fef08a;
+        --text-muted: #eab308;
+        --border-color: rgba(202, 138, 4, 0.2);
+      }
+
       body {
-        transition: background-color 0.3s ease, color 0.3s ease;
+        transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s ease;
+        background-color: var(--bg-main) !important;
+        color: var(--text-main);
       }
 
-      /* XP Theme Styles */
-      body.theme-xp {
-        font-family: 'Tahoma', sans-serif;
-        background-color: #245DDA;
-        background-image: url('https://upload.wikimedia.org/wikipedia/en/2/27/Bliss_%28Windows_XP%29.png');
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
+      /* Deep theme overrides for Tailwind components */
+      .bg-white, .bg-slate-50, .bg-slate-900, .bg-slate-800 {
+        background-color: var(--bg-sidebar) !important;
+        transition: background-color 0.5s ease;
       }
       
-      .theme-xp ::-webkit-scrollbar {
-        width: 16px;
-        background: #ECE9D8;
-      }
-      .theme-xp ::-webkit-scrollbar-thumb {
-        background: #245DDA;
-        border: 2px solid #ECE9D8;
-        border-radius: 4px;
-      }
-      .theme-xp ::-webkit-scrollbar-button {
-        background: #245DDA;
-        height: 16px;
+      .bg-slate-50\/50, .bg-slate-900\/50, main {
+        background-color: var(--bg-main) !important;
+        transition: background-color 0.5s ease;
       }
 
-      /* Modern Theme Styles */
-      body.theme-modern {
-        background-color: #f1f5f9; /* slate-100 */
-        font-family: 'Segoe UI', sans-serif;
+      div.bg-white.dark\:bg-slate-800, 
+      .bg-white.dark\:bg-slate-800.rounded-\[2\.5rem\],
+      .bg-white.dark\:bg-slate-800.rounded-3xl {
+        background-color: var(--bg-card) !important;
       }
-      body.theme-modern.dark {
-        background-color: #0f172a; /* slate-900 */
-        color: white;
+
+      .border-slate-200, .border-slate-800, .border-slate-100, .border-slate-700, .border-slate-300 {
+        border-color: var(--border-color) !important;
       }
-      
-      .theme-modern ::-webkit-scrollbar {
-        width: 8px;
+
+      .text-slate-900, .dark .text-white {
+        color: var(--text-main) !important;
+      }
+
+      .text-slate-500, .text-slate-400, .text-slate-600 {
+        color: var(--text-muted) !important;
+      }
+
+      /* Form Elements */
+      input, textarea {
+        background-color: var(--bg-main) !important;
+        color: var(--text-main) !important;
+        border-color: var(--border-color) !important;
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
         background: transparent;
       }
-      .theme-modern ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
+      ::-webkit-scrollbar-thumb {
+        background: var(--primary-brand);
+        border-radius: 10px;
+        opacity: 0.3;
       }
-      .theme-modern.dark ::-webkit-scrollbar-thumb {
-        background: #475569;
+
+      @keyframes slideIn {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
       }
+      .animate-slide-in {
+        animation: slideIn 0.4s ease-out forwards;
+      }
+
+      /* Dynamic Brand Colors */
+      .bg-blue-600 { background-color: var(--primary-brand) !important; }
+      .hover\:bg-blue-700:hover { background-color: var(--primary-brand-hover) !important; }
+      .text-blue-600, .text-blue-500 { color: var(--primary-brand) !important; }
+      .border-blue-600 { border-color: var(--primary-brand) !important; }
+      .shadow-blue-500\/20 { --tw-shadow-color: var(--primary-brand) !important; }
+      .ring-blue-500\/10 { --tw-ring-color: rgba(var(--primary-brand), 0.1) !important; }
     </style>
   <script type="importmap">
 {
